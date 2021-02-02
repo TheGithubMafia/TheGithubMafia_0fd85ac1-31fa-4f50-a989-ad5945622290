@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
+#include "logging.h"
 
 int main(){
-	printf("Hello\n");
+	char time[22];
+	getTime(time);
+	printf("%s\n", time);
 }
