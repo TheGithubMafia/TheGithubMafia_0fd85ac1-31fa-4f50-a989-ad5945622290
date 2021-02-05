@@ -30,7 +30,7 @@ int getTimeShort(char str[11]){
 	return 0;
 }
 
-//Will write to log file formatted 
+//Will write to log directory formatted 
 int logToFile(char* msg, int type, char* dir){
 	FILE *log;
 
@@ -53,36 +53,25 @@ int logToFile(char* msg, int type, char* dir){
 
 	log = fopen(fileLoc, "a+");	
 	if(!log){
-		printLogError("Error opening log file: ");
+		logError("Error opening log file", 2, 0);
 		return -1;
 	}
 
 	char formattedMsg[1024];
 	createLogFormat(formattedMsg, msg, type);
-	fprintf(log, formattedMsg);
-	fputc('\n', log);
+	if(fprintf(log, "%s\n", formattedMsg) < 0){
+		logError("Error writing to log file", 2, 0);
+		return -1;
+	}
 
 	return 0;
 }
 
-//Give message + strerror
-int printLogError(char *msg){
-	char fullMsg[1024];
-	strcpy(fullMsg, msg);
-	strcat(fullMsg, strerror(errno));
-
-	printLogFormat(fullMsg, 1);
-
-	return 0;
-}
-
-int printLogFormat(char *msg, int type){
+void printLogFormat(char *msg, int type){
 	char formattedMsg[1024];
 
 	createLogFormat(formattedMsg, msg, type);
 	printf("%s\n", formattedMsg);
-
-	return 0;
 }	
 
 //create string in form [time] - [Type of message] - message
@@ -90,17 +79,45 @@ int printLogFormat(char *msg, int type){
 // 1 = WARNING
 // 2 = ERROR
 // 3 = FATAL
-int createLogFormat(char* buffer, char* msg, int type){
+void createLogFormat(char* buffer, char* msg, int type){
 	char time[22] = {0};
 	getTime(time);
 
+	char formattedType[16];
+	char* typeStr;
+	switch (type) {
+		case 0:
+			typeStr = "INFO";
+			break;
+
+		case 1:
+			typeStr = "WARNING";
+			break;
+
+		case 2:
+			typeStr = "ERROR";
+			break;
+
+		case 3:
+			typeStr = "FATAL";
+			break;
+	}
+	
+	snprintf(formattedType, sizeof(formattedType)/sizeof(char), " - [%s] - ", typeStr);
+
 	strcpy(buffer, time);
-	strcat(buffer, " - [INFO] - ");
+	strcat(buffer, formattedType);
 	strcat(buffer, msg);
+}
 
-	type++;
+//same as logMessage, but will append the strerror at end of string
+int logError(char* msg, int type, int useFile){
+	char fullMsg[1024];
+	strcpy(fullMsg, msg);
+	strcat(fullMsg, ": ");
+	strcat(fullMsg, strerror(errno));
 
-	return 0;
+	return logMessage(fullMsg, type, useFile);
 }
 
 //print to stdout and log to file
@@ -108,7 +125,9 @@ int logMessage(char* msg, int type, int useFile){
 	printLogFormat(msg, type);
 
 	if(useFile){
-		logToFile(msg, type, NULL);
+		if(logToFile(msg, type, NULL) < 0){
+			return -1;
+		}
 	}
 		
 	return 0;

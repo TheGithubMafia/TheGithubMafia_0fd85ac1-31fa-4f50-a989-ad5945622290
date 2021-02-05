@@ -3,7 +3,7 @@
 #include "logging.h"
 
 int main(){
-	printLogError("Hello");
+	logError("Hello", 2, 1);
 	printLogFormat("Started system", 0);
 	logMessage("Shutting down system", 0, 1);
 
