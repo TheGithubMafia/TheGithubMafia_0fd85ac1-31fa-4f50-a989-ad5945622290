@@ -1,0 +1,4 @@
+1. Logging
+2. Config
+3. Socket connections
+4. handle communication
