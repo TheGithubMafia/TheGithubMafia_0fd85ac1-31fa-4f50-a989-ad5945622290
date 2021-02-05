@@ -1,4 +1,5 @@
-#pragma once
+#ifndef logging
+#define logging
 
 //Time format: [YYYY-MM-DD HH-MM-SS]
 int getTime(char str[22]);
@@ -19,3 +20,5 @@ int logError(char* msg, int type, int useFile);
 
 //print to stdout and log to file
 int logMessage(char* msg, int type, int useFile);
+
+#endif
