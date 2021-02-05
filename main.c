@@ -3,7 +3,9 @@
 #include "logging.h"
 
 int main(){
-	char time[22];
-	getTime(time);
-	printf("%s\n", time);
+	printLogError("Hello");
+	printLogFormat("Started system", 0);
+	logMessage("Shutting down system", 0, 1);
+
+	return 0;
 }
