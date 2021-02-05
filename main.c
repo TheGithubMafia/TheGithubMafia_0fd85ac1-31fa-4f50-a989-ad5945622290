@@ -3,11 +3,10 @@
 #include "logging.h"
 
 int main(){
-	logMessage("Starting program", 0, 1);
-
-	struct configData data;
-	readConfig("NO", &data);
-	printf(data.ports);
+	log_editConfig(1, NULL);
+	log_logMessage("Starting program", 0);
+	log_editConfig(1, "/var/log/irc-server");
+	log_logMessage("YOLO", 5);
 
 	return 0;
 }

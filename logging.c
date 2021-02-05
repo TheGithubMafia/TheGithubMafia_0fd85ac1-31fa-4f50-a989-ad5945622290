@@ -6,10 +6,38 @@
 #include <errno.h>
 #include "logging.h"
 
-const char* defaultLogDir = "/var/log/irc-server/";
+const char* LOG_DEFAULT_LOGGING_DIR = "/var/log/irc-server/";
 
-//Time format: [YYYY-MM-DD HH-MM-SS]
-int getTime(char str[22]){
+FILE* log_LogFile;
+struct log_Config log_LoggingConfig = {0};
+
+void log_editConfig(int useFile, char* dir){
+	if(log_LoggingConfig.useFile != useFile){
+		log_LoggingConfig.useFile = useFile;
+
+		if(!useFile){
+			log_printLogFormat("Disabled Logging to a file", 1);
+		} else {
+			log_printLogFormat("Enabled Logging to a file", 1);
+		}
+	}
+
+	if(dir == NULL)
+		return;
+	if(strcmp(log_LoggingConfig.directory, dir) != 0){
+		strcpy(log_LoggingConfig.directory, dir);
+
+		char msg[1100];
+		strcpy(msg, "Changing logging directory to ");
+		strcat(msg, log_LoggingConfig.directory);
+		log_printLogFormat(msg, 1);
+
+		if(log_LogFile)
+			fclose(log_LogFile);
+	}
+}	
+
+int log_getTime(char str[22]){
 	time_t rawtime;
 	time(&rawtime);
 	struct tm *time = localtime(&rawtime);
@@ -19,8 +47,7 @@ int getTime(char str[22]){
 	return 0;
 }
 
-//Time format: YYYY-MM-DD
-int getTimeShort(char str[11]){
+int log_getTimeShort(char str[11]){
 	time_t rawtime;
 	time(&rawtime);
 	struct tm *time = localtime(&rawtime);
@@ -30,77 +57,93 @@ int getTimeShort(char str[11]){
 	return 0;
 }
 
-//Will write to log directory formatted 
-int logToFile(char* msg, int type, char* dir){
-	FILE *log;
+int log_logToFile(char* msg, int type){
+	//check to see if log file is already open
+	if(!log_LogFile){
 
-	if(!dir){
-		dir = (char *) defaultLogDir;
-	}
+		//get file location for this log
+		char fileLoc[1024];
+		char endChar = log_LoggingConfig.directory[strlen(log_LoggingConfig.directory) - 1];
+		strcpy(fileLoc, log_LoggingConfig.directory);
+		if(endChar != '\\' || endChar != '/')
+			strcat(fileLoc, "/");
 
-	//get file location for this log
-	char fileLoc[1024];
-	char endChar = dir[strlen(dir) - 1];
-	strcpy(fileLoc, dir);
-	if(endChar != '\\' || endChar != '/')
-		strcat(fileLoc, "/");
+		//YYYY-MM-DD.log filename
+		char time[11];
+		log_getTimeShort(time);
+		strcat(fileLoc, time);
+		strcat(fileLoc, ".log");
 
-	//YYYY-MM-DD.log filename
-	char time[11];
-	getTimeShort(time);
-	strcat(fileLoc, time);
-	strcat(fileLoc, ".log");
-
-	log = fopen(fileLoc, "a+");	
-	if(!log){
-		logError("Error opening log file", 2, 0);
-		return -1;
+		log_LogFile = fopen(fileLoc, "a+");	
+		if(!log_LogFile){
+			log_printLogError("Error opening log file", 3);
+			log_editConfig(0, log_LoggingConfig.directory);
+			return -1;
+		}
 	}
 
 	char formattedMsg[1024];
-	createLogFormat(formattedMsg, msg, type);
-	if(fprintf(log, "%s\n", formattedMsg) < 0){
-		logError("Error writing to log file", 2, 0);
+	log_createLogFormat(formattedMsg, msg, type);
+	if(fprintf(log_LogFile, "%s\n", formattedMsg) < 0){
+		log_printLogError("Error writing to log file", 3);
+		log_editConfig(0, log_LoggingConfig.directory);
 		return -1;
 	}
 
 	return 0;
 }
 
-void printLogFormat(char *msg, int type){
+void log_printLogError(char* msg, int type){
+	char fullMsg[1024];
+	strcpy(fullMsg, msg);
+	strcat(fullMsg, ": ");
+	strcat(fullMsg, strerror(errno));
+	
+	log_printLogFormat(fullMsg, type);
+}
+
+void log_printLogFormat(char *msg, int type){
 	char formattedMsg[1024];
 
-	createLogFormat(formattedMsg, msg, type);
+	log_createLogFormat(formattedMsg, msg, type);
 	printf("%s\n", formattedMsg);
 }	
 
-//create string in form [time] - [Type of message] - message
-// 0 = INFO
-// 1 = WARNING
-// 2 = ERROR
-// 3 = FATAL
-void createLogFormat(char* buffer, char* msg, int type){
+void log_createLogFormat(char* buffer, char* msg, int type){
 	char time[22] = {0};
-	getTime(time);
+	log_getTime(time);
 
 	char formattedType[16];
 	char* typeStr;
 	switch (type) {
 		case 0:
-			typeStr = "INFO";
+			typeStr = "TRACE";
 			break;
 
 		case 1:
-			typeStr = "WARNING";
+			typeStr = "DEBUG";
 			break;
 
 		case 2:
-			typeStr = "ERROR";
+			typeStr = "INFO";
 			break;
 
 		case 3:
+			typeStr = "WARNING";
+			break;
+
+		case 4:
+			typeStr = "ERROR";
+			break;
+
+		case 5:
 			typeStr = "FATAL";
 			break;
+
+		case 6:
+			typeStr = "MESSAGE";
+			break;
+
 	}
 	
 	snprintf(formattedType, sizeof(formattedType)/sizeof(char), " - [%s] - ", typeStr);
@@ -110,22 +153,20 @@ void createLogFormat(char* buffer, char* msg, int type){
 	strcat(buffer, msg);
 }
 
-//same as logMessage, but will append the strerror at end of string
-int logError(char* msg, int type, int useFile){
+int log_logError(char* msg, int type){
 	char fullMsg[1024];
 	strcpy(fullMsg, msg);
 	strcat(fullMsg, ": ");
 	strcat(fullMsg, strerror(errno));
 
-	return logMessage(fullMsg, type, useFile);
+	return log_logMessage(fullMsg, type);
 }
 
-//print to stdout and log to file
-int logMessage(char* msg, int type, int useFile){
-	printLogFormat(msg, type);
+int log_logMessage(char* msg, int type){
+	log_printLogFormat(msg, type);
 
-	if(useFile){
-		if(logToFile(msg, type, NULL) < 0){
+	if(log_LoggingConfig.useFile){
+		if(log_logToFile(msg, type) < 0){
 			return -1;
 		}
 	}
