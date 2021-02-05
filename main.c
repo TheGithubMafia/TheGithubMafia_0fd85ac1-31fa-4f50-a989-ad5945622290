@@ -3,9 +3,11 @@
 #include "logging.h"
 
 int main(){
-	logError("Hello", 2, 1);
-	printLogFormat("Started system", 0);
-	logMessage("Shutting down system", 0, 1);
+	logMessage("Starting program", 0, 1);
+
+	struct configData data;
+	readConfig("NO", &data);
+	printf(data.ports);
 
 	return 0;
 }
