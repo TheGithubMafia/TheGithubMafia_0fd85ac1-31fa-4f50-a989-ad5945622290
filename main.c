@@ -8,5 +8,6 @@ int main(){
 	log_editConfig(1, "/var/log/irc-server");
 	log_logMessage("YOLO", 5);
 
+	log_close();
 	return 0;
 }

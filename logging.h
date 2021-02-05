@@ -14,6 +14,9 @@ struct log_Config {
 //edits the log_Config struct, also logs changes it makes
 void log_editConfig(int useFule, char* dir);
 
+//cleans up the logging for termination of the program
+void log_close();
+
 //Time format: [YYYY-MM-DD HH-MM-SS]
 int log_getTime(char str[22]);
 

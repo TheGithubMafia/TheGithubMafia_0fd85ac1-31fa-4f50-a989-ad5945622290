@@ -37,6 +37,12 @@ void log_editConfig(int useFile, char* dir){
 	}
 }	
 
+void log_close(){
+	if(log_LogFile){
+		fclose(log_LogFile);
+	}
+}
+
 int log_getTime(char str[22]){
 	time_t rawtime;
 	time(&rawtime);
