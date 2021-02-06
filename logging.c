@@ -16,9 +16,9 @@ void log_editConfig(int useFile, char* dir){
 		log_LoggingConfig.useFile = useFile;
 
 		if(!useFile){
-			log_printLogFormat("Disabled Logging to a file", 1);
+			log_printLogFormat("Disabled Logging to a file", 2);
 		} else {
-			log_printLogFormat("Enabled Logging to a file", 1);
+			log_printLogFormat("Enabled Logging to a file", 2);
 		}
 	}
 
@@ -30,7 +30,7 @@ void log_editConfig(int useFile, char* dir){
 		char msg[1100];
 		strcpy(msg, "Changing logging directory to ");
 		strcat(msg, log_LoggingConfig.directory);
-		log_printLogFormat(msg, 1);
+		log_printLogFormat(msg, 2);
 
 		if(log_LogFile)
 			fclose(log_LogFile);
@@ -82,7 +82,7 @@ int log_logToFile(char* msg, int type){
 
 		log_LogFile = fopen(fileLoc, "a+");	
 		if(!log_LogFile){
-			log_printLogError("Error opening log file", 3);
+			log_printLogError("Error opening log file", 4);
 			log_editConfig(0, log_LoggingConfig.directory);
 			return -1;
 		}
@@ -91,7 +91,7 @@ int log_logToFile(char* msg, int type){
 	char formattedMsg[1024];
 	log_createLogFormat(formattedMsg, msg, type);
 	if(fprintf(log_LogFile, "%s\n", formattedMsg) < 0){
-		log_printLogError("Error writing to log file", 3);
+		log_printLogError("Error writing to log file", 4);
 		log_editConfig(0, log_LoggingConfig.directory);
 		return -1;
 	}

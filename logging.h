@@ -1,5 +1,5 @@
-#ifndef logging
-#define logging
+#ifndef logging_h
+#define logging_h
 
 /* Struct that defines how logging should be carried out
    useFile determines if logs will go to a file or not
