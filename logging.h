@@ -1,5 +1,8 @@
+#include <stdio.h>
 #ifndef logging_h
 #define logging_h
+
+#define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
 /* Struct that defines how logging should be carried out
    useFile determines if logs will go to a file or not
@@ -8,7 +11,7 @@
    ONLY EDIT THIS STRUCT WITH THE log_editConfig() METHOD */
 struct log_Config {
 	int useFile;
-	char directory[1024];
+	char directory[BUFSIZ];
 };
 
 //edits the log_Config struct, also logs changes it makes
