@@ -26,7 +26,7 @@ void log_editConfig(int useFile, char* dir){
 		return;
 	if(strcmp(log_LoggingConfig.directory, dir) != 0){
 		strncpy(log_LoggingConfig.directory, dir, ARRAY_SIZE(log_LoggingConfig.directory)-1);
-		log_
+		log_LoggingConfig.directory[ARRAY_SIZE(log_LoggingConfig.directory)-1] = '\0';
 
 		char msg[BUFSIZ];
 		strcpy(msg, "Changing logging directory to ");
