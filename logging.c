@@ -25,9 +25,10 @@ void log_editConfig(int useFile, char* dir){
 	if(dir == NULL)
 		return;
 	if(strcmp(log_LoggingConfig.directory, dir) != 0){
-		strcpy(log_LoggingConfig.directory, dir);
+		strncpy(log_LoggingConfig.directory, dir, ARRAY_SIZE(log_LoggingConfig.directory)-1);
+		log_
 
-		char msg[1100];
+		char msg[BUFSIZ];
 		strcpy(msg, "Changing logging directory to ");
 		strcat(msg, log_LoggingConfig.directory);
 		log_printLogFormat(msg, 2);
@@ -68,7 +69,7 @@ int log_logToFile(char* msg, int type){
 	if(!log_LogFile){
 
 		//get file location for this log
-		char fileLoc[1024];
+		char fileLoc[BUFSIZ];
 		char endChar = log_LoggingConfig.directory[strlen(log_LoggingConfig.directory) - 1];
 		strcpy(fileLoc, log_LoggingConfig.directory);
 		if(endChar != '\\' || endChar != '/')
@@ -88,7 +89,7 @@ int log_logToFile(char* msg, int type){
 		}
 	}
 
-	char formattedMsg[1024];
+	char formattedMsg[BUFSIZ];
 	log_createLogFormat(formattedMsg, msg, type);
 	if(fprintf(log_LogFile, "%s\n", formattedMsg) < 0){
 		log_printLogError("Error writing to log file", 4);
@@ -100,7 +101,7 @@ int log_logToFile(char* msg, int type){
 }
 
 void log_printLogError(char* msg, int type){
-	char fullMsg[1024];
+	char fullMsg[BUFSIZ];
 	strcpy(fullMsg, msg);
 	strcat(fullMsg, ": ");
 	strcat(fullMsg, strerror(errno));
@@ -109,7 +110,7 @@ void log_printLogError(char* msg, int type){
 }
 
 void log_printLogFormat(char *msg, int type){
-	char formattedMsg[1024];
+	char formattedMsg[BUFSIZ];
 
 	log_createLogFormat(formattedMsg, msg, type);
 	printf("%s\n", formattedMsg);
@@ -160,7 +161,7 @@ void log_createLogFormat(char* buffer, char* msg, int type){
 }
 
 int log_logError(char* msg, int type){
-	char fullMsg[1024];
+	char fullMsg[BUFSIZ];
 	strcpy(fullMsg, msg);
 	strcat(fullMsg, ": ");
 	strcat(fullMsg, strerror(errno));

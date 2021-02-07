@@ -65,7 +65,7 @@ void fig_parseLine(char *line, struct fig_ConfigData* data){
 	switch (option) {
 		case 0:
 			//port
-			data->port = strtol(words[i], NULL, 10);
+			data->port = strtol(words[1], NULL, 10);
 			break;
 
 		case 1:
