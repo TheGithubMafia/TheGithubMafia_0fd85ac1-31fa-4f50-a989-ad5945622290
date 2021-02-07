@@ -3,6 +3,13 @@
 #define logging_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
+#define TRACE	(0)
+#define DEBUG	(1)
+#define INFO	(2)
+#define WARNING	(3)
+#define ERROR	(4)
+#define FATAL	(5)
+#define MESSAGE	(6)
 
 /* Struct that defines how logging should be carried out
    useFile determines if logs will go to a file or not

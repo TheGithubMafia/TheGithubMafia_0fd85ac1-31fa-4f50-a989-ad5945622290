@@ -16,9 +16,9 @@ void log_editConfig(int useFile, char* dir){
 		log_LoggingConfig.useFile = useFile;
 
 		if(!useFile){
-			log_printLogFormat("Disabled Logging to a file", 2);
+			log_printLogFormat("Disabled Logging to a file", INFO);
 		} else {
-			log_printLogFormat("Enabled Logging to a file", 2);
+			log_printLogFormat("Enabled Logging to a file", INFO);
 		}
 	}
 
@@ -31,7 +31,7 @@ void log_editConfig(int useFile, char* dir){
 		char msg[BUFSIZ];
 		strcpy(msg, "Changing logging directory to ");
 		strcat(msg, log_LoggingConfig.directory);
-		log_printLogFormat(msg, 2);
+		log_printLogFormat(msg, INFO);
 
 		if(log_LogFile)
 			fclose(log_LogFile);
@@ -83,7 +83,7 @@ int log_logToFile(char* msg, int type){
 
 		log_LogFile = fopen(fileLoc, "a+");	
 		if(!log_LogFile){
-			log_printLogError("Error opening log file", 4);
+			log_printLogError("Error opening log file", ERROR);
 			log_editConfig(0, log_LoggingConfig.directory);
 			return -1;
 		}
@@ -92,7 +92,7 @@ int log_logToFile(char* msg, int type){
 	char formattedMsg[BUFSIZ];
 	log_createLogFormat(formattedMsg, msg, type);
 	if(fprintf(log_LogFile, "%s\n", formattedMsg) < 0){
-		log_printLogError("Error writing to log file", 4);
+		log_printLogError("Error writing to log file", ERROR);
 		log_editConfig(0, log_LoggingConfig.directory);
 		return -1;
 	}
@@ -123,31 +123,31 @@ void log_createLogFormat(char* buffer, char* msg, int type){
 	char formattedType[16];
 	char* typeStr;
 	switch (type) {
-		case 0:
+		case TRACE:
 			typeStr = "TRACE";
 			break;
 
-		case 1:
+		case DEBUG:
 			typeStr = "DEBUG";
 			break;
 
-		case 2:
+		case INFO:
 			typeStr = "INFO";
 			break;
 
-		case 3:
+		case WARNING:
 			typeStr = "WARNING";
 			break;
 
-		case 4:
+		case ERROR:
 			typeStr = "ERROR";
 			break;
 
-		case 5:
+		case FATAL:
 			typeStr = "FATAL";
 			break;
 
-		case 6:
+		case MESSAGE:
 			typeStr = "MESSAGE";
 			break;
 
