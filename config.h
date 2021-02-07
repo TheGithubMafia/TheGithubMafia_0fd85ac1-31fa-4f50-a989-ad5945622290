@@ -9,7 +9,7 @@
 struct fig_ConfigData {
 	char logDirectory[BUFSIZ];
 	int useFile;
-	int ports[16];
+	int port;
 };	
 
 void fig_lowerString(char *str);
