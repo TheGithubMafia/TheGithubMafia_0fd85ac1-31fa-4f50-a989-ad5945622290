@@ -1,0 +1,51 @@
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(){
+	int sock;
+	struct addrinfo hints;
+	struct addrinfo *res, *rp;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET6;
+	hints.ai_socktype = SOCK_STREAM;
+	
+	int ret = getaddrinfo(NULL, "6667", &hints, &res);
+	if(ret != 0){
+		printf("Error getaddrinfo\n");
+		return -1;
+	}	
+
+	for(rp = res; rp != NULL; rp = rp->ai_next){
+		sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if(sock < 0){
+			continue;
+		}
+
+		if(!connect(sock, rp->ai_addr, rp->ai_addrlen)){
+			break;
+		}
+
+		close(sock);
+	}
+
+	freeaddrinfo(res);
+
+	if(rp == NULL){
+		printf("Error connect socket\n");
+		return -1;
+	}
+
+	char buffer[BUFSIZ] = "MR BEAST";
+	send(sock, buffer, strlen(buffer), 0);
+	read(sock, buffer, BUFSIZ);
+	printf("%s\n", buffer);
+
+	close(sock);
+	return 0;
+}
