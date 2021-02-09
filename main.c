@@ -16,9 +16,13 @@ int main(){
 	struct com_SocketInfo sockAddr;
 	int sock = com_startServerSocket(&config, &sockAddr, 0);
 	if(sock < 0){
-		return -1;
+		log_logMessage("Retrying with IPv4...", INFO);
+		sock = com_startServerSocket(&config, &sockAddr, 1);
+		if(sock < 0){
+			return -1;
+		}
 	}
-	//com_acceptClients(&sockAddr);
+	com_acceptClients(&sockAddr);
 
 	close(sock);
 	return 0;

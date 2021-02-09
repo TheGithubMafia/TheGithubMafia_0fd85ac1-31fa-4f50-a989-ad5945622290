@@ -20,7 +20,7 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr *addr, int protocol){
 		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
 		addrSrc = &s->sin6_addr;
 	} else {
-		log_logMessage("Invalid protocol", WARNING);
+		log_logMessage("Invalid socket family", WARNING);
 		return -1;
 	}
 
@@ -33,7 +33,6 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr *addr, int protocol){
 }
 
 int com_acceptClients(struct com_SocketInfo* sockAddr){
-	//fix protocol detection
 	int protocol = sockAddr->addr.ss_family, sock = sockAddr->socket;
 	struct sockaddr_storage cliAddr;
 	socklen_t cliAddrSize = sizeof(cliAddr);
@@ -117,6 +116,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 	//Copy sockaddr struct into the sockAddr struct for later use
 	if(sockAddr != NULL){
 		memcpy(&sockAddr->addr, &rp->ai_addr, sizeof(rp->ai_addr));
+		sockAddr->addr.ss_family = rp->ai_family;
 	}
 
 	freeaddrinfo(res);
