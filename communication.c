@@ -5,11 +5,64 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include "communication.h"
 #include "logging.h"
 #include "config.h"
 
-int com_startServerSocket(struct fig_ConfigData* data, int forceIPv4){
+int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr *addr, int protocol){
+	void *addrSrc;
+
+	if(protocol == AF_INET){
+		struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+		addrSrc = &s->sin_addr;
+	} else if (protocol == AF_INET6){
+		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+		addrSrc = &s->sin6_addr;
+	} else {
+		log_logMessage("Invalid protocol", WARNING);
+		return -1;
+	}
+
+	if(inet_ntop(protocol, addrSrc, ipstr, INET6_ADDRSTRLEN) == NULL){
+		log_logError("Error getting hostname", WARNING);
+		return -1;
+	}
+
+	return 0;
+}
+
+int com_acceptClients(struct com_SocketInfo* sockAddr){
+	//fix protocol detection
+	int protocol = sockAddr->addr.ss_family, sock = sockAddr->socket;
+	struct sockaddr_storage cliAddr;
+	socklen_t cliAddrSize = sizeof(cliAddr);
+
+	//Accept client's connection and log its IP
+	int client = accept(sock, (struct sockaddr *)&cliAddr, &cliAddrSize);
+	if(client < 0){
+		log_logError("Error accepting client", WARNING);
+		return -1;
+	} else {
+		char ipstr[INET6_ADDRSTRLEN];
+		if(!getHost(ipstr, (struct sockaddr *)&cliAddr, protocol)){
+			char msg[BUFSIZ];
+			strncpy(msg, "New client connected from: ", ARRAY_SIZE(msg));
+			strncat(msg, ipstr, ARRAY_SIZE(msg)-strlen(msg));
+			log_logMessage(msg, MESSAGE);
+		}
+	}
+
+	char buffer[BUFSIZ];
+	read(client, buffer, ARRAY_SIZE(buffer));
+	log_logMessage(buffer, MESSAGE);
+	send(client, buffer, strlen(buffer), 0);
+
+	close(client);
+	return 0;
+}
+
+int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4){
 	int sock;
 	struct addrinfo hints;
 	struct addrinfo *res, *rp;
@@ -32,16 +85,11 @@ int com_startServerSocket(struct fig_ConfigData* data, int forceIPv4){
 		char msg[BUFSIZ];
 		strncpy(msg, "Error with getaddrinfo: ", ARRAY_SIZE(msg));
 		strncat(msg, gai_strerror(ret), ARRAY_SIZE(msg)-strlen(msg));
-		if(!forceIPv4){
-			log_logMessage(msg, ERROR);
-			log_logMessage("Retrying with iPv4...", 2);
-			return com_startServerSocket(data, 1);
-		} else {
-			log_logMessage(msg, FATAL);
-			exit(EXIT_FAILURE);
-		}
+		log_logMessage(msg, ERROR);
+		return -1;
 	}
 
+	// Go through all possible options given by getaddrinfo
 	for(rp = res; rp != NULL; rp = rp->ai_next){
 		sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 		if(sock < 0){
@@ -60,23 +108,24 @@ int com_startServerSocket(struct fig_ConfigData* data, int forceIPv4){
 		close(sock);
 	}	
 
-	freeaddrinfo(res);
-
+	// No address succeeded
 	if(rp == NULL){
-		if(!forceIPv4){
-			log_logError("No addresses sucessfully binded IPv6!", ERROR);
-			log_logMessage("Retrying with iPv4...", 2);
-			return com_startServerSocket(data, 1);
-		} else {
-			log_logError("No addresses sucessfully binded IPv4!", FATAL);
-			exit(EXIT_FAILURE);
-		}
+		log_logError("No addresses sucessfully binded", ERROR);
+		return -1;
 	}
+
+	//Copy sockaddr struct into the sockAddr struct for later use
+	if(sockAddr != NULL){
+		memcpy(&sockAddr->addr, &rp->ai_addr, sizeof(rp->ai_addr));
+	}
+
+	freeaddrinfo(res);
 
 	ret = listen(sock, 128);
 	if(ret != 0){
-		log_logError("Error listening on socket", FATAL);
-		exit(EXIT_FAILURE);
+		log_logError("Error listening on socket", ERROR);
+		close(sock);
+		return -1;
 	} else {
 		char msg[BUFSIZ];
 		strncpy(msg, "Listening to port ", ARRAY_SIZE(msg));
@@ -84,5 +133,6 @@ int com_startServerSocket(struct fig_ConfigData* data, int forceIPv4){
 		log_logMessage(msg, INFO);
 	}
 
+	sockAddr->socket = sock;
 	return sock;
 }

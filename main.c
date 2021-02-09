@@ -13,7 +13,12 @@ int main(){
 	fig_readConfig("example_config.conf", &config);
 	log_editConfig(config.useFile, config.logDirectory);
 
-	int sock = com_startServerSocket(&config, 0);
+	struct com_SocketInfo sockAddr;
+	int sock = com_startServerSocket(&config, &sockAddr, 0);
+	if(sock < 0){
+		return -1;
+	}
+	//com_acceptClients(&sockAddr);
 
 	close(sock);
 	return 0;
