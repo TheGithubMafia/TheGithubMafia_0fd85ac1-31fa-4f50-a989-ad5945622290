@@ -101,10 +101,10 @@ int log_logToFile(char* msg, int type){
 }
 
 void log_printLogError(char* msg, int type){
-	char fullMsg[BUFSIZ];
-	strcpy(fullMsg, msg);
-	strcat(fullMsg, ": ");
-	strcat(fullMsg, strerror(errno));
+	char fullMsg[BUFSIZ] = {0};
+	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
+	strncat(fullMsg, ": ", 2);
+	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
 	
 	log_printLogFormat(fullMsg, type);
 }
@@ -153,18 +153,19 @@ void log_createLogFormat(char* buffer, char* msg, int type){
 
 	}
 	
-	snprintf(formattedType, sizeof(formattedType)/sizeof(char), " - [%s] - ", typeStr);
+	snprintf(formattedType, ARRAY_SIZE(formattedType), " - [%s] - ", typeStr);
 
-	strcpy(buffer, time);
-	strcat(buffer, formattedType);
-	strcat(buffer, msg);
+	strncpy(buffer, time, ARRAY_SIZE(buffer)-1);
+	buffer[ARRAY_SIZE(buffer)-1] = '\0';
+	strncat(buffer, formattedType, ARRAY_SIZE(buffer)-strlen(buffer));
+	strncat(buffer, msg, ARRAY_SIZE(buffer)-strlen(buffer));
 }
 
 int log_logError(char* msg, int type){
-	char fullMsg[BUFSIZ];
-	strcpy(fullMsg, msg);
-	strcat(fullMsg, ": ");
-	strcat(fullMsg, strerror(errno));
+	char fullMsg[BUFSIZ] = {0};
+	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
+	strncat(fullMsg, ": ", 2);
+	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
 
 	return log_logMessage(fullMsg, type);
 }
