@@ -12,6 +12,9 @@ struct com_SocketInfo {
 	struct sockaddr_storage addr;
 };
 
+// Convert sockaddr to a string to display the client's IP in string form
+int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
+
 //accept and handle all communication with clients
 int com_acceptClients(struct com_SocketInfo* sockAddr);
 
