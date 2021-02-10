@@ -10,7 +10,7 @@
 #include "logging.h"
 #include "config.h"
 
-int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr *addr, int protocol){
+int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
 	void *addrSrc;
 
 	if(protocol == AF_INET){
@@ -44,7 +44,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr){
 		return -1;
 	} else {
 		char ipstr[INET6_ADDRSTRLEN];
-		if(!getHost(ipstr, (struct sockaddr *)&cliAddr, protocol)){
+		if(!getHost(ipstr, cliAddr, protocol)){
 			char msg[BUFSIZ];
 			strncpy(msg, "New client connected from: ", ARRAY_SIZE(msg));
 			strncat(msg, ipstr, ARRAY_SIZE(msg)-strlen(msg));
@@ -58,6 +58,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr){
 	send(client, buffer, strlen(buffer), 0);
 
 	close(client);
+	protocol++;
 	return 0;
 }
 
