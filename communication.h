@@ -1,5 +1,12 @@
+#include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <netdb.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include "logging.h"
 #include "config.h"
 #ifndef communication_h
 #define communication_h

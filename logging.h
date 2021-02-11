@@ -1,4 +1,9 @@
 #include <stdio.h>
+#include <time.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 #ifndef logging_h
 #define logging_h
 
