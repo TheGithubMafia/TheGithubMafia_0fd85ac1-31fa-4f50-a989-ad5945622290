@@ -2,7 +2,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include "config.h"
 #include "logging.h"
 #ifndef config_h
 #define config_h
