@@ -55,7 +55,7 @@ void log_printLogFormat(char *msg, int type);
 // 4 = ERROR
 // 5 = FATAL
 // 6 = MESSAGE
-void log_createLogFormat(char* buffer, char* msg, int type);
+void log_createLogFormat(char* buffer, int size, char* msg, int type);
 
 //same as logMessage, but will append strerror at end of the string
 int log_logError(char* msg, int type);

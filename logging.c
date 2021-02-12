@@ -90,7 +90,7 @@ int log_logToFile(char* msg, int type){
 	}
 
 	char formattedMsg[BUFSIZ];
-	log_createLogFormat(formattedMsg, msg, type);
+	log_createLogFormat(formattedMsg, ARRAY_SIZE(formattedMsg), msg, type);
 	if(fprintf(log_LogFile, "%s\n", formattedMsg) < 0){
 		log_printLogError("Error writing to log file", ERROR);
 		log_editConfig(0, log_LoggingConfig.directory);
@@ -103,7 +103,7 @@ int log_logToFile(char* msg, int type){
 void log_printLogError(char* msg, int type){
 	char fullMsg[BUFSIZ] = {0};
 	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
-	strncat(fullMsg, ": ", 2);
+	strncat(fullMsg, ": ", 3);
 	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
 	
 	log_printLogFormat(fullMsg, type);
@@ -112,11 +112,11 @@ void log_printLogError(char* msg, int type){
 void log_printLogFormat(char *msg, int type){
 	char formattedMsg[BUFSIZ];
 
-	log_createLogFormat(formattedMsg, msg, type);
+	log_createLogFormat(formattedMsg, ARRAY_SIZE(formattedMsg), msg, type);
 	printf("%s\n", formattedMsg);
 }	
 
-void log_createLogFormat(char* buffer, char* msg, int type){
+void log_createLogFormat(char* buffer, int size, char* msg, int type){
 	char time[22] = {0};
 	log_getTime(time);
 
@@ -153,18 +153,18 @@ void log_createLogFormat(char* buffer, char* msg, int type){
 
 	}
 	
-	snprintf(formattedType, ARRAY_SIZE(formattedType), " - [%s] - ", typeStr);
+	snprintf(formattedType, size, " - [%s] - ", typeStr);
 
-	strncpy(buffer, time, ARRAY_SIZE(buffer)-1);
-	buffer[ARRAY_SIZE(buffer)-1] = '\0';
-	strncat(buffer, formattedType, ARRAY_SIZE(buffer)-strlen(buffer));
-	strncat(buffer, msg, ARRAY_SIZE(buffer)-strlen(buffer));
+	strncpy(buffer, time, size-1);
+	buffer[size-1] = '\0';
+	strncat(buffer, formattedType, size-strlen(buffer));
+	strncat(buffer, msg, size-strlen(buffer));
 }
 
 int log_logError(char* msg, int type){
 	char fullMsg[BUFSIZ] = {0};
 	strncpy(fullMsg, msg, ARRAY_SIZE(fullMsg)-1);
-	strncat(fullMsg, ": ", 2);
+	strncat(fullMsg, ": ", 3);
 	strncat(fullMsg, strerror(errno), ARRAY_SIZE(fullMsg)-strlen(fullMsg));
 
 	return log_logMessage(fullMsg, type);
