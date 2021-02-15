@@ -6,9 +6,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <poll.h>
+#include <limits.h>
+#include <time.h>
 #include "communication.h"
 #include "logging.h"
 #include "config.h"
+
+pthread_mutex_t *com_clientListMutex;
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
 	void *addrSrc;
@@ -32,33 +38,153 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 	return 0;
 }
 
-int com_acceptClients(struct com_SocketInfo* sockAddr){
-	int protocol = sockAddr->addr.ss_family, sock = sockAddr->socket;
-	struct sockaddr_storage cliAddr;
-	socklen_t cliAddrSize = sizeof(cliAddr);
+void *com_communicateWithClients(void *param){
+	int ret, threadNum;
+	char buff[BUFSIZ];
+	struct com_ClientList *clientList = param;
+	struct timespec delay = {.tv_nsec = 1000000}; // 1ms
 
-	//Accept client's connection and log its IP
-	int client = accept(sock, (struct sockaddr *)&cliAddr, &cliAddrSize);
-	if(client < 0){
-		log_logError("Error accepting client", WARNING);
-		return -1;
-	} else {
+	threadNum = clientList->threadNum;
+	while(1){
+		pthread_mutex_lock(&com_clientListMutex[threadNum]);
+
+		ret = poll(clientList->clients, clientList->connected, 50);
+		if(ret != 0){
+			for(int i = 0; i < clientList->maxClients; i++){
+				if((clientList->clients[i].revents & POLLIN) == POLLIN){
+					int bytes = read(clientList->clients[i].fd, buff, ARRAY_SIZE(buff));
+					buff[bytes] = '\0';
+					if(bytes <= 0){
+						if(bytes == 0){
+							log_logMessage("Client disconnect", INFO);
+						} else if(bytes == -1){
+							log_logError("Error reading from client", WARNING);
+						}
+
+						//move last socket to current spot
+						close(clientList->clients[i].fd);
+						clientList->clients[i].fd = clientList->clients[clientList->connected-1].fd;
+						clientList->clients[clientList->connected-1].fd = -1;
+						clientList->connected--;
+					} else {
+						log_logMessage(buff, MESSAGE);
+					}
+				}
+			}
+		}
+
+		pthread_mutex_unlock(&com_clientListMutex[threadNum]);
+		nanosleep(&delay, NULL); // Allow other threads time to access mutex
+	}
+	
+	return NULL;
+}
+
+int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
+	int least = -1, numConnected = INT_MAX;
+	for(int i = 0; i < numThreads; i++){
+		pthread_mutex_lock(&com_clientListMutex[i]);
+		if(clientList[i].connected < clientList[i].maxClients){
+			if(least == -1 || clientList[i].connected < numConnected){
+				least = i;
+				numConnected = clientList[i].connected;
+			}
+		}	
+		pthread_mutex_unlock(&com_clientListMutex[i]);
+	}
+
+	if(least != -1){
+		pthread_mutex_lock(&com_clientListMutex[least]);
+		clientList[least].connected++;
+		
+		int selectedSpot = 0;
+		for(int i = 0; i < clientList[least].maxClients; i++){
+			if(clientList[least].clients[i].fd < 0){
+				selectedSpot = i;
+				break;
+			}
+		}
+		clientList[least].clients[selectedSpot].fd = addr.socket;
+		
+		pthread_mutex_unlock(&com_clientListMutex[least]);
+		return least;
+	}
+
+	log_logMessage("Reached max clients!", WARNING);
+	return -1;
+}
+
+int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* data){
+	char buff[BUFSIZ];
+
+	if(data->threads <= 0){
+		data->threads = 1;
+	}	
+
+	if(data->clients <= 0){
+		data->clients = 20;
+	}
+
+	// Setup mutexes for each of the threads
+	pthread_mutex_t clientsMutex[data->threads];
+	com_clientListMutex = clientsMutex;
+	
+	//Create threads and com_ClientList for each of the threads
+	pthread_t threads[data->threads];
+	struct com_ClientList clientList[data->threads];
+	struct pollfd clients[data->threads][data->clients / data->threads + 1];
+	for(int i = 0; i < data->threads; i++){
+		clientList[i].maxClients = data->clients / data->threads;
+		clientList[i].threadNum = i;
+		clientList[i].clients = clients[i];
+
+		// Settings for each pollfd struct
+		for(int x = 0; x < clientList[i].maxClients; x++){
+			clientList[i].clients[x].fd = -1;
+			clientList[i].clients[x].events = POLLIN | POLLNVAL | POLLERR;
+		}
+
+		int ret = pthread_create(&threads[i], NULL, com_communicateWithClients, &clientList[i]);
+		if(ret != 0){
+			snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
+			log_logMessage(buff, ERROR);
+			return -1;
+		}
+	}
+	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", data->threads);
+	log_logMessage(buff, INFO);
+
+	while(1){
+		struct sockaddr_storage cliAddr;
+		socklen_t cliAddrSize = sizeof(cliAddr);
+
+		//Accept client's connection and log its IP
+		struct com_SocketInfo newCli;
+		int client = accept(sockAddr->socket, (struct sockaddr *)&cliAddr, &cliAddrSize);
+		if(client < 0){
+			log_logError("Error accepting client", WARNING);
+			continue;
+		}
+
 		char ipstr[INET6_ADDRSTRLEN];
-		if(!getHost(ipstr, cliAddr, protocol)){
-			char msg[BUFSIZ];
-			strncpy(msg, "New client connected from: ", ARRAY_SIZE(msg));
-			strncat(msg, ipstr, ARRAY_SIZE(msg)-strlen(msg));
-			log_logMessage(msg, MESSAGE);
+		if(!getHost(ipstr, cliAddr, sockAddr->addr.ss_family)){
+			strncpy(buff, "New client connected from: ", ARRAY_SIZE(buff));
+			strncat(buff, ipstr, ARRAY_SIZE(buff)-strlen(buff));
+			log_logMessage(buff, MESSAGE);
+		}
+
+		// Fill in newCli struct
+		newCli.socket = client;
+		memcpy(&newCli.addr, &cliAddr, cliAddrSize);
+
+		int ret = com_insertClient(newCli, clientList, data->threads);
+		if(ret < 0){
+			snprintf(buff, ARRAY_SIZE(buff), "Server is full");
+			send(client, buff, strlen(buff), 0);
+			close(client);
 		}
 	}
 
-	char buffer[BUFSIZ];
-	read(client, buffer, ARRAY_SIZE(buffer));
-	log_logMessage(buffer, MESSAGE);
-	send(client, buffer, strlen(buffer), 0);
-
-	close(client);
-	protocol++;
 	return 0;
 }
 

@@ -22,7 +22,7 @@ int main(){
 			return -1;
 		}
 	}
-	com_acceptClients(&sockAddr);
+	com_acceptClients(&sockAddr, &config);
 
 	close(sock);
 	return 0;
