@@ -14,6 +14,8 @@ struct fig_ConfigData {
 	char logDirectory[BUFSIZ];
 	int useFile;
 	int port;
+	int threads;
+	int clients;
 };	
 
 void fig_lowerString(char *str);

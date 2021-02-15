@@ -6,7 +6,7 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging"};
+const char *options[] = {"port", "log", "enablelogging", "numthreads", "numclients"};
 
 void fig_lowerString(char *str){
 	for(int i = 0; i < (int) strlen(str); i++){
@@ -65,7 +65,12 @@ void fig_parseLine(char *line, struct fig_ConfigData* data){
 	switch (option) {
 		case 0:
 			//port
+			errno = 0;
 			data->port = strtol(words[1], NULL, 10);
+			if(errno != 0){
+				log_logError("Error converting string to int: port", WARNING);
+				data->port = 0;
+			}
 			break;
 
 		case 1:
@@ -83,6 +88,25 @@ void fig_parseLine(char *line, struct fig_ConfigData* data){
 			}
 			break;
 
+		case 3:
+			//num threads
+			errno = 0;
+			data->threads = strtol(words[1], NULL, 10);
+			if(errno != 0){
+				log_logError("Error converting string to int: threads", WARNING);
+				data->threads = 0;
+			}
+			break;
+
+		case 4:
+			//max clients
+			errno = 0;
+			data->clients = strtol(words[1], NULL, 10);
+			if(errno != 0){
+				log_logError("Error converting string to int: clients", WARNING);
+				data->clients = 0;
+			}
+			break;
 	}
 }
 
