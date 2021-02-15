@@ -42,9 +42,13 @@ int main(){
 	}
 
 	char buffer[BUFSIZ] = "MR BEAST";
-	send(sock, buffer, strlen(buffer), 0);
-	read(sock, buffer, BUFSIZ);
-	printf("%s\n", buffer);
+	while(1){
+		fgets(buffer, BUFSIZ, stdin);
+		send(sock, buffer, strlen(buffer), 0);
+		if(buffer[0] == '@'){
+			break;
+		}
+	}
 
 	close(sock);
 	return 0;
