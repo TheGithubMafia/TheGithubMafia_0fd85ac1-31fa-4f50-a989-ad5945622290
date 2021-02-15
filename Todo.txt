@@ -4,5 +4,9 @@
 4. handle communication
 	4.1 secure communication
 	4.2 thread for each user
+	4.3 accurate max clients
+	4.4 binary search sockfd to com_SocketInfo
+	4.5 remove disconnected clients
+	4.6 Place clients into pollfd correctly
 
 ** Fix the standard string in logging.c and use BUFSIZ and ARRAY_SIZE() **
