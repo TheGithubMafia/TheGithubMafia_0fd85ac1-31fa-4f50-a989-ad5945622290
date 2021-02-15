@@ -133,8 +133,13 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 	pthread_t threads[data->threads];
 	struct com_ClientList clientList[data->threads];
 	struct pollfd clients[data->threads][data->clients / data->threads + 1];
+	int leftOver = data->clients % data->threads; // Get remaining spots for each thread
 	for(int i = 0; i < data->threads; i++){
 		clientList[i].maxClients = data->clients / data->threads;
+		if(leftOver > 0){
+			clientList[i].maxClients++;
+			leftOver--;
+		}
 		clientList[i].threadNum = i;
 		clientList[i].clients = clients[i];
 
