@@ -48,10 +48,22 @@ void *com_communicateWithClients(void *param){
 	while(1){
 		pthread_mutex_lock(&com_clientListMutex[threadNum]);
 
-		ret = poll(clientList->clients, clientList->connected, 50);
+		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
 			for(int i = 0; i < clientList->maxClients; i++){
-				if((clientList->clients[i].revents & POLLIN) == POLLIN){
+				if(clientList->clients[i].revents & POLLERR){
+					log_logMessage("Client error", WARNING);
+					close(clientList->clients[i].fd);
+					clientList->clients[i].fd = -1;
+					clientList->connected--;
+
+				} else if (clientList->clients[i].revents & POLLHUP){
+					log_logMessage("Client closed connection", INFO);
+					close(clientList->clients[i].fd);
+					clientList->clients[i].fd = -1;
+					clientList->connected--;
+
+				} else if (clientList->clients[i].revents & POLLIN){
 					int bytes = read(clientList->clients[i].fd, buff, ARRAY_SIZE(buff));
 					buff[bytes] = '\0';
 					if(bytes <= 0){
@@ -61,16 +73,17 @@ void *com_communicateWithClients(void *param){
 							log_logError("Error reading from client", WARNING);
 						}
 
-						//move last socket to current spot
 						close(clientList->clients[i].fd);
-						clientList->clients[i].fd = clientList->clients[clientList->connected-1].fd;
-						clientList->clients[clientList->connected-1].fd = -1;
+						clientList->clients[i].fd = -1;
 						clientList->connected--;
 					} else {
 						log_logMessage(buff, MESSAGE);
 					}
 				}
 			}
+		} else if (ret < 0) {
+			log_logError("Error with poll()", ERROR);
+			exit(EXIT_FAILURE);
 		}
 
 		pthread_mutex_unlock(&com_clientListMutex[threadNum]);
@@ -146,7 +159,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 		// Settings for each pollfd struct
 		for(int x = 0; x < clientList[i].maxClients; x++){
 			clientList[i].clients[x].fd = -1;
-			clientList[i].clients[x].events = POLLIN | POLLNVAL | POLLERR;
+			clientList[i].clients[x].events = POLLIN | POLLHUP;
 		}
 
 		int ret = pthread_create(&threads[i], NULL, com_communicateWithClients, &clientList[i]);
@@ -175,7 +188,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 		if(!getHost(ipstr, cliAddr, sockAddr->addr.ss_family)){
 			strncpy(buff, "New client connected from: ", ARRAY_SIZE(buff));
 			strncat(buff, ipstr, ARRAY_SIZE(buff)-strlen(buff));
-			log_logMessage(buff, MESSAGE);
+			log_logMessage(buff, INFO);
 		}
 
 		// Fill in newCli struct
