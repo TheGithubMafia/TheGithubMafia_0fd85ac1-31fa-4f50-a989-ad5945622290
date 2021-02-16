@@ -3,7 +3,6 @@
 3. Socket connections
 4. handle communication
 	4.1 secure communication
-	4.2 accurate max clients
-	4.3 binary search sockfd to com_SocketInfo
+	4.2 binary search sockfd to com_SocketInfo
 
 ** Fix the standard string in logging.c and use BUFSIZ and ARRAY_SIZE() **
