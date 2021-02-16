@@ -4,5 +4,6 @@
 4. handle communication
 	4.1 secure communication
 	4.2 binary search sockfd to com_SocketInfo
+5. Channels
 
 ** Fix the standard string in logging.c and use BUFSIZ and ARRAY_SIZE() **
