@@ -17,6 +17,10 @@
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
+/* This header defines functions that handle all of the
+ * Sending and receiving of data that the server will handle
+ */
+
 //struct to store data about the socket, and its file descriptor
 struct com_SocketInfo {
 	int socket;
