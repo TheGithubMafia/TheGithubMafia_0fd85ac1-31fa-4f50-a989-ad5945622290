@@ -119,10 +119,12 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 
 	if(data->threads <= 0){
 		data->threads = 1;
+		log_logMessage("Must have at least 1 thread! Using 1 thread", WARNING);
 	}	
 
 	if(data->clients <= 0){
 		data->clients = 20;
+		log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
 	}
 
 	// Setup mutexes for each of the threads
