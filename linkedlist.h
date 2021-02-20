@@ -26,6 +26,11 @@ int link_isEmpty(struct link_List *list);
 // Add element to end of list
 int link_add(struct link_List *list, void *data);
 
+/*
+ * When using link_remove() only set freeData to 1
+ * If the data had been set using malloc or
+ * Equivalent
+ */
 int link_remove(struct link_List *list, int pos, int freeData);
 
 struct link_Node *link_getNode(struct link_List *list, int pos);

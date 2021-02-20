@@ -38,6 +38,9 @@ int main(){
 	link_add(&list, p);
 	*p += 10;
 	link_add(&list, p);
+	printf("Z %d\n", list.size);
+	link_remove(&list, 0, 0);
+	printf("Z %d\n", list.size);
 
 	struct link_Node *node = link_getNode(&list, 1);
 	if(!node){
