@@ -13,8 +13,10 @@
 #include "communication.h"
 #include "logging.h"
 #include "config.h"
+#include "chat.h"
 
 pthread_mutex_t *com_clientListMutex;
+struct chat_ChatRoom room = {0};
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
 	void *addrSrc;
