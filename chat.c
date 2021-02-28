@@ -6,70 +6,82 @@
 #include "chat.h"
 #include "linkedlist.h"
 
-int chat_CreateUser(struct chat_UserData userList[], struct com_SocketInfo *sockInfo, char* name){
-	// Look for the first empty spot in the userList
-	// The 0th spot is reserved for the list's mutex
-	pthread_mutex_lock(&userList[0].userMutex);
-	int res = -1;
-	for (int i = 1; i < ARRAY_SIZE(userList); i++){
-		if(userList[i].id <= 0){
-			res = i;
-			break;
-		}
-	}
+struct chat_AllUsers allUsers = {0};
+size_t chat_globalUserID = 0;
 
-	if(res < 0){
-		pthread_mutex_unlock(&userList[0].userMutex);
-		log_logMessage("Can't add uesr: Server full", ERROR);
-		return -1;
-	}
-
-	userList[res].id = res;
-	strncpy(userList[res].name, name, ARRAY_SIZE(userList[res].name - 1));
-	userList
-
-
-	return 0;
+void chat_setMaxUsers(int max){
+	allUsers.max = max;
 }
 
-//Maybe consider adding user mutex
-int chat_addToRoom(struct chat_ChatRoom *room, struct chat_UserData *user){
+struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char* name){
+	struct chat_UserData *user;
+
+	pthread_mutex_lock(&allUsers.allUsersMutex);
+	if(allUsers.users.size >= allUsers.max){
+		log_logMessage("Server is full", WARNING);
+		pthread_mutex_unlock(&allUsers.allUsersMutex);	
+		return NULL;
+	}
+
+	user = malloc(sizeof(struct chat_UserData));
+	if(user == NULL){
+		log_logError("Error adding user", ERROR);
+		pthread_mutex_unlock(&allUsers.allUsersMutex);	
+		return NULL;
+	}
+	//Set user's data
+	memset(user, 0, sizeof(struct chat_UserData));
+	//eventually get this id from saved user data
+	user->id = chat_globalUserID++;
+	strncpy(user->name, name, 25);
+	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
+
+	link_add(&allUsers.users, user);
+
+	pthread_mutex_unlock(&allUsers.allUsersMutex);	
+
+	return user;
+}
+
+// Add a user to a room
+int chat_addToRoom(struct chat_ChatRoom *room, struct chat_UserData **user){
 	pthread_mutex_lock(&room->roomMutex);
-	int ret = link_add(&room->users, user);
+	int ret = link_add(&room->users, *user);
 	pthread_mutex_unlock(&room->roomMutex);
 
 	return ret;
 }
 
+// Make the double pointer work so that it will become null when the user is invalid
 int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize){
 	struct link_Node *node;
 	struct chat_UserData *user;
 	int ret;
 
 	if(room == NULL){
-		log_logError("Invalid room");
+		log_logMessage("Invalid room", WARNING);
 		return -1;
 	}
 
 	pthread_mutex_lock(&room->roomMutex);
+	// Loop through each user in the room and send them the message
 	for(node = room->users.head; node != NULL; node = node->next){
 		user = (struct chat_UserData *)node->data;
 		if(user == NULL){
 			continue;
 		}
 
-		pthread_mutex_lock(&user->userMutex);
-		if(user->socketInfo.socket >= 0){//Do nothing if negative socket fd
-			ret = write(user->socketInfo.socket, msg, msgSize);
+		pthread_mutex_lock(&(*user).userMutex);
+		if((*user).socketInfo.socket >= 0){//Do nothing if negative socket fd
+			ret = write((*user).socketInfo.socket, msg, msgSize);//SOme reason is same fd?
 			if(ret < 1){
 				log_logError("Error sending to client", DEBUG);
 			}
 		}
-		pthread_mutex_unlock(&user->userMutex);
+		pthread_mutex_unlock(&(*user).userMutex);
 	}
 
 	pthread_mutex_unlock(&room->roomMutex);
 
 	return 0;
 }
-

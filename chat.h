@@ -9,6 +9,19 @@
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
+/*  Note about the structure of the users
+	All new users are added to the main linked
+	list via malloc. All other uses to users should
+	access the user through a pointer to the pointer
+	inside the main list so that one free() will notify
+	all other pointers that the user no longer exists
+*/
+struct chat_AllUsers {
+	int max;
+	struct link_List users;	
+	pthread_mutex_t allUsersMutex;
+};
+
 // Data about an user
 struct chat_UserData {
 	size_t id;
@@ -31,8 +44,13 @@ struct chat_ChatRoom {
 	pthread_mutex_t roomMutex;
 };
 
-int chat_addToRoom(struct chat_ChatRoom *room, struct chat_UserData *user);
+void chat_setMaxUsers(int max);
 
-int chat_sendRoomMsg(struct chat_ChatRoom *rom, char *msg, int msgSize);
+// Returns a new user, also automatically adds the user to the main list
+struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
+
+int chat_addToRoom(struct chat_ChatRoom *room, struct chat_UserData **user);
+
+int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize);
 
 #endif
