@@ -79,6 +79,7 @@ void *com_communicateWithClients(void *param){
 						clientList->clients[i].fd = -1;
 						clientList->connected--;
 					} else {
+						chat_sendRoomMsg(&room, buff, ARRAY_SIZE(buff));
 						log_logMessage(buff, MESSAGE);
 					}
 				}
@@ -122,6 +123,8 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		clientList[least].clients[selectedSpot].fd = addr.socket;
 		
 		pthread_mutex_unlock(&com_clientListMutex[least]);
+		struct chat_UserData *newUser = chat_createUser(&addr, "NERD");	
+		chat_addToRoom(&room, &newUser);
 		return least;
 	}
 
@@ -141,6 +144,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 		data->clients = 20;
 		log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
 	}
+	chat_setMaxUsers(data->clients);
 
 	// Setup mutexes for each of the threads
 	pthread_mutex_t clientsMutex[data->threads];
