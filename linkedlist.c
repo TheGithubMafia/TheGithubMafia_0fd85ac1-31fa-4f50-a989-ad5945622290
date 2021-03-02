@@ -11,11 +11,11 @@ int link_isEmpty(struct link_List *list){
 	return -1;
 }
 
-int link_add(struct link_List *list, void *data){
+struct link_Node *link_add(struct link_List *list, void *data){
 	struct link_Node *node = malloc(sizeof(struct link_Node));
 	if(node == NULL){
 		log_logError("Error adding to linked list", DEBUG);
-		return -1;
+		return NULL;
 	}
 	list->size++;
 
@@ -30,7 +30,7 @@ int link_add(struct link_List *list, void *data){
 	}
 	list->tail = node;
 
-	return 0;
+	return node;
 }
 
 int link_remove(struct link_List *list, int pos, int freeData){

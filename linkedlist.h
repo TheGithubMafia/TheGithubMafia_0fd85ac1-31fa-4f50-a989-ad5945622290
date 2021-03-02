@@ -24,7 +24,7 @@ struct link_Node {
 int link_isEmpty(struct link_List *list);
 
 // Add element to end of list
-int link_add(struct link_List *list, void *data);
+struct link_Node *link_add(struct link_List *list, void *data);
 
 /*
  * When using link_remove() only set freeData to 1
