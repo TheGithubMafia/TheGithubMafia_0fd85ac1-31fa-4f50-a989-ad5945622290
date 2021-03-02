@@ -46,11 +46,13 @@ struct chat_ChatRoom {
 
 void chat_setMaxUsers(int max);
 
-// Returns a new user, also automatically adds the user to the main list
-struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
+// Returns the node to a new user, also automatically adds the user to the main list
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
 
-int chat_addToRoom(struct chat_ChatRoom *room, struct chat_UserData **user);
+// Places a double pointer to the user into the Room's list
+struct link_Node *chat_addToRoom(struct chat_ChatRoom *room, struct link_Node *user);
 
+// Sends a message to all online users in this room
 int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize);
 
 #endif
