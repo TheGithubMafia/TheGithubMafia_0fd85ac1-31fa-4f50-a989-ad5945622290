@@ -38,7 +38,7 @@ struct com_ClientList {
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
 
-// Handle all communication between server and client
+// Handle all incoming data from the client
 void *com_communicateWithClients(void *param);
 
 // Place a new client into a pollfd struct
