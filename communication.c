@@ -123,8 +123,8 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		clientList[least].clients[selectedSpot].fd = addr.socket;
 		
 		pthread_mutex_unlock(&com_clientListMutex[least]);
-		struct chat_UserData *newUser = chat_createUser(&addr, "NERD");	
-		chat_addToRoom(&room, &newUser);
+		struct link_Node *newUser = chat_createUser(&addr, "NERD");	
+		chat_addToRoom(&room, newUser);
 		return least;
 	}
 
