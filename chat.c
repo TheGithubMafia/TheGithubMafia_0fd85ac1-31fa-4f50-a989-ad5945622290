@@ -13,12 +13,78 @@ void chat_setMaxUsers(int max){
 	allUsers.max = max;
 }
 
-
-//Create a new user and return the node that it is in
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char* name){
+//Same as other but uses name to find answer
+struct link_Node *chat_getUserByName(char name[NAME_LENGTH]){
+	struct link_Node *node;
 	struct chat_UserData *user;
 
 	pthread_mutex_lock(&allUsers.allUsersMutex);
+
+	for(node = allUsers.users.head; node != NULL; node = node->next){
+		user = node->data;
+
+		//compare the names letter by letter
+		for(int i = 0; i < ARRAY_SIZE(user->name); i++){
+			if(user->name[i] != name[i]){
+				break;
+			}
+
+			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			return node;
+		}
+	}
+
+	pthread_mutex_unlock(&allUsers.allUsersMutex);
+
+	return NULL;
+}
+
+//Find the user in the allUsers list using the user id
+struct link_Node *chat_getUserById(size_t id){
+	struct link_Node *node;
+	struct chat_UserData *user;
+
+	pthread_mutex_lock(&allUsers.allUsersMutex);
+
+	for(node = allUsers.users.head; node != NULL; node = node->next){
+		user = node->data;
+
+		if(user->id == id){
+			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			return node;
+		}
+
+	}
+
+	pthread_mutex_unlock(&allUsers.allUsersMutex);
+
+	return NULL;
+}
+
+struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]){
+	struct link_Node *node = chat_getUserByName(name);
+
+	if(node == NULL){
+		return NULL;
+	}
+
+	struct chat_UserData *user = node->data;
+	pthread_mutex_lock(&(user->userMutex));
+
+	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
+	
+	pthread_mutex_lock(&(user->userMutex));
+
+	return node;
+}
+
+//Create a new user and return the node that it is in
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]){
+	struct chat_UserData *user;
+
+	pthread_mutex_lock(&allUsers.allUsersMutex);
+	//Plan to remove this maxUser check because it should be only
+	//for connected users
 	if(allUsers.users.size >= allUsers.max){
 		log_logMessage("Server is full", WARNING);
 		pthread_mutex_unlock(&allUsers.allUsersMutex);	
@@ -35,7 +101,7 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char* name){
 	memset(user, 0, sizeof(struct chat_UserData));
 	//eventually get this id from saved user data
 	user->id = chat_globalUserID++;
-	strncpy(user->name, name, 25);
+	strncpy(user->name, name, NAME_LENGTH-1);
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 
 	struct link_Node *userNode = link_add(&allUsers.users, user);
@@ -70,10 +136,17 @@ int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize){
 	for(node = room->users.head; node != NULL; node = node->next){
 		user = (struct chat_UserData **)node->data;
 		if(user == NULL){
+			//Add remove user function: invalid user
 			continue;
 		}
 
 		pthread_mutex_lock(&(**user).userMutex);
+
+		if((**user).socketInfo.socket < 0){
+			//deal with offline user
+			continue;
+		}
+
 		if((**user).socketInfo.socket >= 0){//Do nothing if negative socket fd
 			ret = write((**user).socketInfo.socket, msg, msgSize);
 			if(ret < 1){
