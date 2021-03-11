@@ -22,6 +22,7 @@ struct link_Node *chat_getUserByName(char name[NAME_LENGTH]){
 
 	for(node = allUsers.users.head; node != NULL; node = node->next){
 		user = node->data;
+		pthread_mutex_lock(&user->userMutex);
 
 		//compare the names letter by letter
 		for(int i = 0; i < ARRAY_SIZE(user->name); i++){
@@ -29,9 +30,12 @@ struct link_Node *chat_getUserByName(char name[NAME_LENGTH]){
 				break;
 			}
 
+			pthread_mutex_unlock(&user->userMutex);
 			pthread_mutex_unlock(&allUsers.allUsersMutex);
 			return node;
 		}
+		
+		pthread_mutex_unlock(&user->userMutex);
 	}
 
 	pthread_mutex_unlock(&allUsers.allUsersMutex);
@@ -48,12 +52,15 @@ struct link_Node *chat_getUserBySocket(int sock){
 
 	for(node = allUsers.users.head; node != NULL; node = node->next){
 		user = node->data;
+		pthread_mutex_lock(&user->userMutex);
 
 		if(user->socketInfo.socket == sock){
+			pthread_mutex_unlock(&user->userMutex);
 			pthread_mutex_unlock(&allUsers.allUsersMutex);
 			return node;
 		}
 
+		pthread_mutex_unlock(&user->userMutex);
 	}
 
 	pthread_mutex_unlock(&allUsers.allUsersMutex);
@@ -70,12 +77,15 @@ struct link_Node *chat_getUserById(size_t id){
 
 	for(node = allUsers.users.head; node != NULL; node = node->next){
 		user = node->data;
+		pthread_mutex_lock(&user->userMutex);
 
 		if(user->id == id){
+			pthread_mutex_unlock(&user->userMutex);
 			pthread_mutex_unlock(&allUsers.allUsersMutex);
 			return node;
 		}
 
+		pthread_mutex_unlock(&user->userMutex);
 	}
 
 	pthread_mutex_unlock(&allUsers.allUsersMutex);
