@@ -57,6 +57,9 @@ struct link_Node *chat_getUserByName(char name[NAME_LENGTH]);
 //Get a user's node in the main list by ID
 struct link_Node *chat_getUserById(size_t id);
 
+//Get a user's node in the main list by Socket FD
+struct link_Node *chat_getUserBySocket(int sock);
+
 //Create a new user based, but only if it doesn't already exist
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]);
 

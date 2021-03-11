@@ -40,6 +40,28 @@ struct link_Node *chat_getUserByName(char name[NAME_LENGTH]){
 }
 
 //Find the user in the allUsers list using the user id
+struct link_Node *chat_getUserBySocket(int sock){
+	struct link_Node *node;
+	struct chat_UserData *user;
+
+	pthread_mutex_lock(&allUsers.allUsersMutex);
+
+	for(node = allUsers.users.head; node != NULL; node = node->next){
+		user = node->data;
+
+		if(user->socketInfo.socket == sock){
+			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			return node;
+		}
+
+	}
+
+	pthread_mutex_unlock(&allUsers.allUsersMutex);
+
+	return NULL;
+}
+
+//Find the user in the allUsers list using the user id
 struct link_Node *chat_getUserById(size_t id){
 	struct link_Node *node;
 	struct chat_UserData *user;
