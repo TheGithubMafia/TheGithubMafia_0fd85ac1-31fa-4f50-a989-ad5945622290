@@ -8,6 +8,7 @@
 #define chat_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
+#define NAME_LENGTH 26
 
 /*  Note about the structure of the users
 	All new users are added to the main linked
@@ -23,10 +24,14 @@ struct chat_AllUsers {
 };
 
 // Data about an user
+// When a user is first loaded from save
+// All details will come from the save
+// except socketInfo, it must filled with 0 bytes
+// except with socketInfo.socket must equal -1
 struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
-	char name[26];
+	char name[NAME_LENGTH];
 	pthread_mutex_t userMutex;
 };
 
@@ -45,6 +50,18 @@ struct chat_ChatRoom {
 };
 
 void chat_setMaxUsers(int max);
+
+//Get a user's node in the main list by name
+struct link_Node *chat_getUserByName(char name[NAME_LENGTH]);
+
+//Get a user's node in the main list by ID
+struct link_Node *chat_getUserById(size_t id);
+
+//Get a user's node in the main list by Socket FD
+struct link_Node *chat_getUserBySocket(int sock);
+
+//Create a new user based, but only if it doesn't already exist
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]);
 
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
