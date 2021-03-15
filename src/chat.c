@@ -144,7 +144,7 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAM
 }
 
 // Add a user to a room from their node on the main user list
-struct link_Node *chat_addToRoom(struct chat_ChatRoom *room, struct link_Node *user){
+struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user){
 	pthread_mutex_lock(&room->roomMutex);
 	struct link_Node *ret = link_add(&room->users, &user->data);
 	pthread_mutex_unlock(&room->roomMutex);
@@ -153,7 +153,7 @@ struct link_Node *chat_addToRoom(struct chat_ChatRoom *room, struct link_Node *u
 }
 
 // Make the double pointer work so that it will become null when the user is invalid
-int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize){
+int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize){
 	struct link_Node *node;
 	struct chat_UserData **user;
 	int ret;

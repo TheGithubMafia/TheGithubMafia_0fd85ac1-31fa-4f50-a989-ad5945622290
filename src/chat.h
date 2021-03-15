@@ -8,7 +8,7 @@
 #define chat_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
-#define NAME_LENGTH 26
+#define NAME_LENGTH 10
 
 /*  Note about the structure of the users
 	All new users are added to the main linked
@@ -42,7 +42,7 @@ struct chat_Server {
 	pthread_mutex_t serverMutex;
 };
 
-struct chat_ChatRoom {
+struct chat_Channel {
 	size_t id;
 	char name[50];
 	struct link_List users;
@@ -66,10 +66,10 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAM
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
 
-// Places a double pointer to the user into the Room's list
-struct link_Node *chat_addToRoom(struct chat_ChatRoom *room, struct link_Node *user);
+// Places a double pointer to the user into the Channel's list
+struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user);
 
 // Sends a message to all online users in this room
-int chat_sendRoomMsg(struct chat_ChatRoom *room, char *msg, int msgSize);
+int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize);
 
 #endif

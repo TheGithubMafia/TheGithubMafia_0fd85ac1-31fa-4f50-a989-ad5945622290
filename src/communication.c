@@ -16,7 +16,7 @@
 #include "chat.h"
 
 pthread_mutex_t *com_clientListMutex;
-struct chat_ChatRoom room = {0};
+struct chat_Channel room = {0};
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
 	void *addrSrc;
@@ -79,7 +79,7 @@ void *com_communicateWithClients(void *param){
 						clientList->clients[i].fd = -1;
 						clientList->connected--;
 					} else {
-						chat_sendRoomMsg(&room, buff, ARRAY_SIZE(buff));
+						chat_sendChannelMsg(&room, buff, ARRAY_SIZE(buff));
 						log_logMessage(buff, MESSAGE);
 					}
 				}
@@ -124,7 +124,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		
 		pthread_mutex_unlock(&com_clientListMutex[least]);
 		struct link_Node *newUser = chat_createUser(&addr, "NERD");	
-		chat_addToRoom(&room, newUser);
+		chat_addToChannel(&room, newUser);
 		return least;
 	}
 
