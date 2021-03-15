@@ -8,7 +8,8 @@
 #define chat_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
-#define NAME_LENGTH 10
+#define NICKNAME_LENGTH 10
+#define CHANNEL_NAME_LENGTH 201
 
 /*  Note about the structure of the users
 	All new users are added to the main linked
@@ -31,7 +32,7 @@ struct chat_AllUsers {
 struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
-	char name[NAME_LENGTH];
+	char name[NICKNAME_LENGTH];
 	pthread_mutex_t userMutex;
 };
 
@@ -44,7 +45,7 @@ struct chat_Server {
 
 struct chat_Channel {
 	size_t id;
-	char name[50];
+	char name[CHANNEL_NAME_LENGTH];
 	struct link_List users;
 	pthread_mutex_t roomMutex;
 };
@@ -52,7 +53,7 @@ struct chat_Channel {
 void chat_setMaxUsers(int max);
 
 //Get a user's node in the main list by name
-struct link_Node *chat_getUserByName(char name[NAME_LENGTH]);
+struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]);
 
 //Get a user's node in the main list by ID
 struct link_Node *chat_getUserById(size_t id);
@@ -61,7 +62,7 @@ struct link_Node *chat_getUserById(size_t id);
 struct link_Node *chat_getUserBySocket(int sock);
 
 //Create a new user based, but only if it doesn't already exist
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]);
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
 
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);

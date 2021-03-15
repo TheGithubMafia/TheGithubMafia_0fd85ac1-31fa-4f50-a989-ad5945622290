@@ -14,7 +14,7 @@ void chat_setMaxUsers(int max){
 }
 
 //Same as other but uses name to find answer
-struct link_Node *chat_getUserByName(char name[NAME_LENGTH]){
+struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
 	struct link_Node *node;
 	struct chat_UserData *user;
 
@@ -93,7 +93,7 @@ struct link_Node *chat_getUserById(size_t id){
 	return NULL;
 }
 
-struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]){
+struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
 	struct link_Node *node = chat_getUserByName(name);
 
 	if(node == NULL){
@@ -111,7 +111,7 @@ struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NAME
 }
 
 //Create a new user and return the node that it is in
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAME_LENGTH]){
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
 	struct chat_UserData *user;
 
 	pthread_mutex_lock(&allUsers.allUsersMutex);
@@ -133,7 +133,7 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NAM
 	memset(user, 0, sizeof(struct chat_UserData));
 	//eventually get this id from saved user data
 	user->id = chat_globalUserID++;
-	strncpy(user->name, name, NAME_LENGTH-1);
+	strncpy(user->name, name, NICKNAME_LENGTH-1);
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 
 	struct link_Node *userNode = link_add(&allUsers.users, user);
