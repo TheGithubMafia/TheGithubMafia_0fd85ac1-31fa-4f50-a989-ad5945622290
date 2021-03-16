@@ -9,23 +9,13 @@
 
 int main(){
 	atexit(log_close);
+    atexit(com_close);
 
-	struct fig_ConfigData config = {0};
-	fig_readConfig("example_config.conf", &config);
-	log_editConfig(config.useFile, config.logDirectory);
+    init_config("example_config.conf"); /* config.h */
+    init_logging(); /* logging.h */
+    init_server(); /* communication.h */
 
-	struct com_SocketInfo sockAddr;
-	int sock = com_startServerSocket(&config, &sockAddr, 0);
-	if(sock < 0){
-		log_logMessage("Retrying with IPv4...", INFO);
-		sock = com_startServerSocket(&config, &sockAddr, 1);
-		if(sock < 0){
-			return -1;
-		}
-	}
-	com_acceptClients(&sockAddr, &config);
-
-	close(sock);
+	//com_acceptClients(&sockAddr, &fig_Configuration);
 
 	return 0;
 }
