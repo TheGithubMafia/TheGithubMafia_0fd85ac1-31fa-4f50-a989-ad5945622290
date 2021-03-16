@@ -16,16 +16,16 @@
 #include "chat.h"
 
 struct com_ClientList *clientList;
-pthread_mutex_t *clientListMutex;
+
+struct com_SocketInfo serverSockAddr;
 int com_serverSocket = -1;
 
 int init_server(){
     // Initalize the server socket
-	struct com_SocketInfo sockAddr;
-	com_serverSocket = com_startServerSocket(&fig_Configuration, &sockAddr, 0);
+	com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
 	if(com_serverSocket < 0){
 		log_logMessage("Retrying with IPv4...", INFO);
-		com_serverSocket = com_startServerSocket(&fig_Configuration, &sockAddr, 1);
+		com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 1);
 		if(com_serverSocket < 0){
 			return -1;
 		}
@@ -44,14 +44,14 @@ int init_server(){
 	chat_setMaxUsers(fig_Configuration.clients);
 
     // Allocate memory based on size from configuration
-	clientList = calloc(fig_Configuration.threads, sizeof(clientList));
-	clientListMutex = calloc(fig_Configuration.threads, sizeof(pthread_mutex_t));
+	clientList = calloc(fig_Configuration.threads, sizeof(struct com_ClientList));
 
     //Setup threads for listening
-    com_listenOnThreads();
+    com_setupIOThreads(fig_Configuration.threads);
+    com_setupDataThreads(0);
 
     //Plan on moving this out of the init function
-	com_acceptClients(&sockAddr);
+	com_acceptClients(&serverSockAddr);
     return 1;
 }
 
@@ -61,7 +61,6 @@ void com_close(){
     }
 
     free(clientList);
-    free(clientListMutex);
 }
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
@@ -87,14 +86,13 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 }
 
 void *com_communicateWithClients(void *param){
-	int ret, threadNum;
+	int ret;
 	char buff[BUFSIZ];
 	struct com_ClientList *clientList = param;
 	struct timespec delay = {.tv_nsec = 1000000}; // 1ms
 
-	threadNum = clientList->threadNum;
 	while(1){
-		pthread_mutex_lock(&clientListMutex[threadNum]);
+		pthread_mutex_lock(&clientList->clientListMutex);
 
 		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
@@ -134,7 +132,7 @@ void *com_communicateWithClients(void *param){
 			exit(EXIT_FAILURE);
 		}
 
-		pthread_mutex_unlock(&clientListMutex[threadNum]);
+		pthread_mutex_unlock(&clientList->clientListMutex);
 		nanosleep(&delay, NULL); // Allow other threads time to access mutex
 	}
 	
@@ -143,20 +141,22 @@ void *com_communicateWithClients(void *param){
 
 //Place a client into one of the poll arrays
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
+    //Go thru each clientList and see which one has the least connected clients
 	int least = -1, numConnected = INT_MAX;
 	for(int i = 0; i < numThreads; i++){
-		pthread_mutex_lock(&clientListMutex[i]);
+		pthread_mutex_lock(&clientList[i].clientListMutex);
 		if(clientList[i].connected < clientList[i].maxClients){
 			if(least == -1 || clientList[i].connected < numConnected){
 				least = i;
 				numConnected = clientList[i].connected;
 			}
 		}	
-		pthread_mutex_unlock(&clientListMutex[i]);
+		pthread_mutex_unlock(&clientList[i].clientListMutex);
 	}
 
 	if(least != -1){
-		pthread_mutex_lock(&clientListMutex[least]);
+		pthread_mutex_lock(&clientList[least].clientListMutex);
+        printf("Past mutex\n");
 		clientList[least].connected++;
 		
 		int selectedSpot = 0;
@@ -168,7 +168,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		}
 		clientList[least].clients[selectedSpot].fd = addr.socket;
 		
-		pthread_mutex_unlock(&clientListMutex[least]);
+		pthread_mutex_unlock(&clientList[least].clientListMutex);
 		return least;
 	}
 
@@ -176,21 +176,26 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 	return -1;
 }
 
-int com_listenOnThreads(){
+int com_setupIOThreads(int numThreads){
 	char buff[BUFSIZ];
+    int ret = 0;
 
 	//Create threads and com_ClientList for each of the threads
-	pthread_t threads[fig_Configuration.threads];
-	struct pollfd clients[fig_Configuration.threads][fig_Configuration.clients / fig_Configuration.threads + 1];
-	int leftOver = fig_Configuration.clients % fig_Configuration.threads; // Get remaining spots for each thread
-	for(int i = 0; i < fig_Configuration.threads; i++){
-		clientList[i].maxClients = fig_Configuration.clients / fig_Configuration.threads;
+	struct pollfd clients[numThreads][fig_Configuration.clients / numThreads + 1];
+	int leftOver = fig_Configuration.clients % numThreads; // Get remaining spots for each thread
+	for(int i = 0; i < numThreads; i++){
+		clientList[i].maxClients = fig_Configuration.clients / numThreads;
 		if(leftOver > 0){
 			clientList[i].maxClients++;
 			leftOver--;
 		}
 		clientList[i].threadNum = i;
 		clientList[i].clients = clients[i];
+        ret = pthread_mutex_init(&clientList[i].clientListMutex, NULL);
+        if(ret < 0){
+            log_logError("Error initalizing pthread_mutex", ERROR);
+            return -1;
+        }
 
 		// Settings for each pollfd struct
 		for(int x = 0; x < clientList[i].maxClients; x++){
@@ -198,17 +203,25 @@ int com_listenOnThreads(){
 			clientList[i].clients[x].events = POLLIN | POLLHUP;
 		}
 
-		int ret = pthread_create(&threads[i], NULL, com_communicateWithClients, &clientList[i]);
+		ret = pthread_create(&clientList[i].thread, NULL, com_communicateWithClients, &clientList[i]);
 		if(ret != 0){
 			snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
 			log_logMessage(buff, ERROR);
 			return -1;
 		}
 	}
-	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", fig_Configuration.threads);
+	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", numThreads);
 	log_logMessage(buff, INFO);
 
-    return 1;
+    return numThreads;
+}
+
+int com_setupDataThreads(int numThreads){
+   //char buff[BUFSIZ];
+
+   //pthread_t threads[numThreads];
+
+   return numThreads;
 }
 
 int com_acceptClients(struct com_SocketInfo* sockAddr){

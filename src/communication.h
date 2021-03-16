@@ -33,7 +33,9 @@ struct com_ClientList {
 	int maxClients;
 	int connected;
 	int threadNum;
-	struct pollfd *clients;
+	struct pollfd *clients; /* pollfd array for poll() */
+    pthread_t thread;
+    pthread_mutex_t clientListMutex;
 };
 
 extern int com_serverSocket;
@@ -53,8 +55,12 @@ void *com_communicateWithClients(void *param);
 // Place a new client into a pollfd struct
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads);
 
-// Setup the threads to start listening for incoming communication
-int com_listenOnThreads();
+// Setup the threads to start listening for incoming communication and send
+// outbound data to clients
+int com_setupIOThreads(int numThreads);
+
+// Setup threads to handle data processing like parsing commands
+int com_setupDataThreads(int numThreads);
 
 //accept and handle all communication with clients
 int com_acceptClients(struct com_SocketInfo* sockAddr);
