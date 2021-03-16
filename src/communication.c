@@ -15,8 +15,54 @@
 #include "config.h"
 #include "chat.h"
 
-pthread_mutex_t *com_clientListMutex;
-struct chat_Channel room = {0};
+struct com_ClientList *clientList;
+pthread_mutex_t *clientListMutex;
+int com_serverSocket = -1;
+
+int init_server(){
+    // Initalize the server socket
+	struct com_SocketInfo sockAddr;
+	com_serverSocket = com_startServerSocket(&fig_Configuration, &sockAddr, 0);
+	if(com_serverSocket < 0){
+		log_logMessage("Retrying with IPv4...", INFO);
+		com_serverSocket = com_startServerSocket(&fig_Configuration, &sockAddr, 1);
+		if(com_serverSocket < 0){
+			return -1;
+		}
+	}
+
+    //Check that the config data is correct
+	if(fig_Configuration.threads <= 1){
+		fig_Configuration.threads = 2;
+		log_logMessage("Must have at least 2 threads! Using 2 threads", WARNING);
+	}	
+
+	if(fig_Configuration.clients <= 0){
+		fig_Configuration.clients = 20;
+		log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
+	}
+	chat_setMaxUsers(fig_Configuration.clients);
+
+    // Allocate memory based on size from configuration
+	clientList = calloc(fig_Configuration.threads, sizeof(clientList));
+	clientListMutex = calloc(fig_Configuration.threads, sizeof(pthread_mutex_t));
+
+    //Setup threads for listening
+    com_listenOnThreads();
+
+    //Plan on moving this out of the init function
+	com_acceptClients(&sockAddr);
+    return 1;
+}
+
+void com_close(){
+    if(com_serverSocket >= 0){
+        close(com_serverSocket);
+    }
+
+    free(clientList);
+    free(clientListMutex);
+}
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
 	void *addrSrc;
@@ -48,7 +94,7 @@ void *com_communicateWithClients(void *param){
 
 	threadNum = clientList->threadNum;
 	while(1){
-		pthread_mutex_lock(&com_clientListMutex[threadNum]);
+		pthread_mutex_lock(&clientListMutex[threadNum]);
 
 		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
@@ -79,7 +125,6 @@ void *com_communicateWithClients(void *param){
 						clientList->clients[i].fd = -1;
 						clientList->connected--;
 					} else {
-						chat_sendChannelMsg(&room, buff, ARRAY_SIZE(buff));
 						log_logMessage(buff, MESSAGE);
 					}
 				}
@@ -89,28 +134,29 @@ void *com_communicateWithClients(void *param){
 			exit(EXIT_FAILURE);
 		}
 
-		pthread_mutex_unlock(&com_clientListMutex[threadNum]);
+		pthread_mutex_unlock(&clientListMutex[threadNum]);
 		nanosleep(&delay, NULL); // Allow other threads time to access mutex
 	}
 	
 	return NULL;
 }
 
+//Place a client into one of the poll arrays
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
 	int least = -1, numConnected = INT_MAX;
 	for(int i = 0; i < numThreads; i++){
-		pthread_mutex_lock(&com_clientListMutex[i]);
+		pthread_mutex_lock(&clientListMutex[i]);
 		if(clientList[i].connected < clientList[i].maxClients){
 			if(least == -1 || clientList[i].connected < numConnected){
 				least = i;
 				numConnected = clientList[i].connected;
 			}
 		}	
-		pthread_mutex_unlock(&com_clientListMutex[i]);
+		pthread_mutex_unlock(&clientListMutex[i]);
 	}
 
 	if(least != -1){
-		pthread_mutex_lock(&com_clientListMutex[least]);
+		pthread_mutex_lock(&clientListMutex[least]);
 		clientList[least].connected++;
 		
 		int selectedSpot = 0;
@@ -122,9 +168,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		}
 		clientList[least].clients[selectedSpot].fd = addr.socket;
 		
-		pthread_mutex_unlock(&com_clientListMutex[least]);
-		struct link_Node *newUser = chat_createUser(&addr, "NERD");	
-		chat_addToChannel(&room, newUser);
+		pthread_mutex_unlock(&clientListMutex[least]);
 		return least;
 	}
 
@@ -132,31 +176,15 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 	return -1;
 }
 
-int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* data){
+int com_listenOnThreads(){
 	char buff[BUFSIZ];
 
-	if(data->threads <= 0){
-		data->threads = 1;
-		log_logMessage("Must have at least 1 thread! Using 1 thread", WARNING);
-	}	
-
-	if(data->clients <= 0){
-		data->clients = 20;
-		log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
-	}
-	chat_setMaxUsers(data->clients);
-
-	// Setup mutexes for each of the threads
-	pthread_mutex_t clientsMutex[data->threads];
-	com_clientListMutex = clientsMutex;
-	
 	//Create threads and com_ClientList for each of the threads
-	pthread_t threads[data->threads];
-	struct com_ClientList clientList[data->threads];
-	struct pollfd clients[data->threads][data->clients / data->threads + 1];
-	int leftOver = data->clients % data->threads; // Get remaining spots for each thread
-	for(int i = 0; i < data->threads; i++){
-		clientList[i].maxClients = data->clients / data->threads;
+	pthread_t threads[fig_Configuration.threads];
+	struct pollfd clients[fig_Configuration.threads][fig_Configuration.clients / fig_Configuration.threads + 1];
+	int leftOver = fig_Configuration.clients % fig_Configuration.threads; // Get remaining spots for each thread
+	for(int i = 0; i < fig_Configuration.threads; i++){
+		clientList[i].maxClients = fig_Configuration.clients / fig_Configuration.threads;
 		if(leftOver > 0){
 			clientList[i].maxClients++;
 			leftOver--;
@@ -177,8 +205,14 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 			return -1;
 		}
 	}
-	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", data->threads);
+	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", fig_Configuration.threads);
 	log_logMessage(buff, INFO);
+
+    return 1;
+}
+
+int com_acceptClients(struct com_SocketInfo* sockAddr){
+	char buff[BUFSIZ];
 
 	while(1){
 		struct sockaddr_storage cliAddr;
@@ -203,7 +237,7 @@ int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* da
 		newCli.socket = client;
 		memcpy(&newCli.addr, &cliAddr, cliAddrSize);
 
-		int ret = com_insertClient(newCli, clientList, data->threads);
+		int ret = com_insertClient(newCli, clientList, fig_Configuration.threads);
 		if(ret < 0){
 			snprintf(buff, ARRAY_SIZE(buff), "Server is full");
 			send(client, buff, strlen(buff), 0);
