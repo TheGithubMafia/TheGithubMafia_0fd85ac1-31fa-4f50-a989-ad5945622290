@@ -1,11 +1,13 @@
+#ifndef logging_h
+#define logging_h
+
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
-#ifndef logging_h
-#define logging_h
+#include "config.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define TRACE	(0)
@@ -26,8 +28,14 @@ struct log_Config {
 	char directory[BUFSIZ];
 };
 
+//Setup intial data for logging
+int init_logging();
+
 //edits the log_Config struct, also logs changes it makes
 void log_editConfig(int useFule, char* dir);
+
+//open the log file
+int log_openFile();
 
 //cleans up the logging for termination of the program
 void log_close();

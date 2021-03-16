@@ -1,11 +1,12 @@
+#ifndef chat_h
+#define chat_h
+
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 #include "communication.h"
 #include "logging.h"
 #include "linkedlist.h"
-#ifndef chat_h
-#define chat_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define NICKNAME_LENGTH 10
@@ -36,6 +37,7 @@ struct chat_UserData {
 	pthread_mutex_t userMutex;
 };
 
+// Server is a list of Channels
 struct chat_Server {
 	size_t id;
 	char name[50];

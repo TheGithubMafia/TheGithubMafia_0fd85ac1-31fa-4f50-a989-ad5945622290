@@ -1,9 +1,10 @@
+#ifndef linkedlist_h
+#define linkedlist_h
+
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include "logging.h"
-#ifndef linkedlist_h
-#define linkedlist_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 

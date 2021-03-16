@@ -1,3 +1,6 @@
+#ifndef communication_h
+#define communication_h
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -12,8 +15,6 @@
 #include <time.h>
 #include "logging.h"
 #include "config.h"
-#ifndef communication_h
-#define communication_h
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
@@ -35,6 +36,14 @@ struct com_ClientList {
 	struct pollfd *clients;
 };
 
+extern int com_serverSocket;
+
+// Setup the server's socket
+int init_server();
+
+// close server socket
+void com_close();
+
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
 
@@ -44,8 +53,11 @@ void *com_communicateWithClients(void *param);
 // Place a new client into a pollfd struct
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads);
 
+// Setup the threads to start listening for incoming communication
+int com_listenOnThreads();
+
 //accept and handle all communication with clients
-int com_acceptClients(struct com_SocketInfo* sockAddr, struct fig_ConfigData* data);
+int com_acceptClients(struct com_SocketInfo* sockAddr);
 
 //start server socket based on configuration
 int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4);
