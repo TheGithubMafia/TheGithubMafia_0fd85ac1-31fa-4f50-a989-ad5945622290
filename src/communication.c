@@ -86,16 +86,27 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 }
 
 void *com_communicateWithClients(void *param){
-	int ret;
-	char buff[BUFSIZ];
 	struct com_ClientList *clientList = param;
 	struct timespec delay = {.tv_nsec = 1000000}; // 1ms
+	char buff[BUFSIZ];
+	int ret;
+
+    // Initalize the pollfd struct array
+	struct pollfd connections[clientList->maxClients];
+    clientList->clients = connections;
+
+    // Settings for each pollfd struct
+    for(int x = 0; x < clientList->maxClients; x++){
+        clientList->clients[x].fd = -1;
+        clientList->clients[x].events = POLLIN | POLLHUP;
+    }
 
 	while(1){
 		pthread_mutex_lock(&clientList->clientListMutex);
 
 		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
+            printf("HERE\n");
 			for(int i = 0; i < clientList->maxClients; i++){
 				if(clientList->clients[i].revents & POLLERR){
 					log_logMessage("Client error", WARNING);
@@ -156,7 +167,6 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 
 	if(least != -1){
 		pthread_mutex_lock(&clientList[least].clientListMutex);
-        printf("Past mutex\n");
 		clientList[least].connected++;
 		
 		int selectedSpot = 0;
@@ -181,7 +191,6 @@ int com_setupIOThreads(int numThreads){
     int ret = 0;
 
 	//Create threads and com_ClientList for each of the threads
-	struct pollfd clients[numThreads][fig_Configuration.clients / numThreads + 1];
 	int leftOver = fig_Configuration.clients % numThreads; // Get remaining spots for each thread
 	for(int i = 0; i < numThreads; i++){
 		clientList[i].maxClients = fig_Configuration.clients / numThreads;
@@ -190,18 +199,13 @@ int com_setupIOThreads(int numThreads){
 			leftOver--;
 		}
 		clientList[i].threadNum = i;
-		clientList[i].clients = clients[i];
+
+        // Initialize the mutex to prevent locking issues
         ret = pthread_mutex_init(&clientList[i].clientListMutex, NULL);
         if(ret < 0){
             log_logError("Error initalizing pthread_mutex", ERROR);
             return -1;
         }
-
-		// Settings for each pollfd struct
-		for(int x = 0; x < clientList[i].maxClients; x++){
-			clientList[i].clients[x].fd = -1;
-			clientList[i].clients[x].events = POLLIN | POLLHUP;
-		}
 
 		ret = pthread_create(&clientList[i].thread, NULL, com_communicateWithClients, &clientList[i]);
 		if(ret != 0){
