@@ -5,11 +5,21 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include "logging.h"
+#include "config.h"
 
 const char* LOG_DEFAULT_LOGGING_DIR = "/var/log/irc-server/";
-
 FILE* log_LogFile;
-struct log_Config log_LoggingConfig = {0};
+
+struct log_Config log_LoggingConfig;
+
+int init_logging(){
+    log_editConfig(fig_Configuration.useFile, fig_Configuration.logDirectory);
+    if(log_LoggingConfig.useFile){
+        log_openFile();
+    }
+
+    return 1;
+}
 
 void log_editConfig(int useFile, char* dir){
 	if(log_LoggingConfig.useFile != useFile){
@@ -37,6 +47,31 @@ void log_editConfig(int useFile, char* dir){
 			fclose(log_LogFile);
 	}
 }	
+
+int log_openFile(){
+    //get file location for this log
+    // XXX fix this strcpy to be strncpy
+    char fileLoc[BUFSIZ];
+    char endChar = log_LoggingConfig.directory[strlen(log_LoggingConfig.directory) - 1];
+    strcpy(fileLoc, log_LoggingConfig.directory);
+    if(endChar != '\\' || endChar != '/')
+        strcat(fileLoc, "/");
+
+    //YYYY-MM-DD.log filename
+    char time[11];
+    log_getTimeShort(time);
+    strcat(fileLoc, time);
+    strcat(fileLoc, ".log");
+
+    log_LogFile = fopen(fileLoc, "a+");	
+    if(!log_LogFile){
+        log_printLogError("Error opening log file", ERROR);
+        log_editConfig(0, log_LoggingConfig.directory);
+        return -1;
+    }
+
+    return 0;
+}
 
 void log_close(){
 	if(log_LogFile){
@@ -67,26 +102,9 @@ int log_getTimeShort(char str[11]){
 int log_logToFile(char* msg, int type){
 	//check to see if log file is already open
 	if(!log_LogFile){
-
-		//get file location for this log
-		char fileLoc[BUFSIZ];
-		char endChar = log_LoggingConfig.directory[strlen(log_LoggingConfig.directory) - 1];
-		strcpy(fileLoc, log_LoggingConfig.directory);
-		if(endChar != '\\' || endChar != '/')
-			strcat(fileLoc, "/");
-
-		//YYYY-MM-DD.log filename
-		char time[11];
-		log_getTimeShort(time);
-		strcat(fileLoc, time);
-		strcat(fileLoc, ".log");
-
-		log_LogFile = fopen(fileLoc, "a+");	
-		if(!log_LogFile){
-			log_printLogError("Error opening log file", ERROR);
-			log_editConfig(0, log_LoggingConfig.directory);
-			return -1;
-		}
+        if(log_openFile() < 0){
+            return -1;
+        }
 	}
 
 	char formattedMsg[BUFSIZ];
