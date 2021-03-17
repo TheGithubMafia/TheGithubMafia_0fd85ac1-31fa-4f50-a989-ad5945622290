@@ -9,8 +9,67 @@
 struct chat_AllUsers allUsers = {0};
 size_t chat_globalUserID = 0;
 
+struct chat_DataQueue dataQueue;
+
 void chat_setMaxUsers(int max){
 	allUsers.max = max;
+}
+
+int init_chat(){
+    // Allocate threads for processing user input 
+    // Divide by two to use half of the avaliable threads
+    dataQueue.threads = calloc(fig_Configuration.threads / 2, sizeof(pthread_t)); 
+    if (dataQueue.threads == NULL){
+        log_logError("Error initalizing dataQueue.threads", ERROR);
+        return -1;
+    }
+    
+    // Initalize mutex to prevent locking issues
+    int ret = pthread_mutex_init(&dataQueue.queueMutex, NULL);
+    if (ret < 0){
+        log_logError("Error initalizing pthread_mutex", ERROR);
+        return -1;
+    }
+
+    return chat_setupDataThreads(&fig_Configuration); 
+}
+
+void chat_close(){
+    free(dataQueue.threads);
+}
+
+int chat_setupDataThreads(struct fig_ConfigData *config){
+    char buff[BUFSIZ];
+    int numThreads = (config->threads / 2); // Half of threads
+    int ret = 0;
+
+    for (int i = 0; i < numThreads; i++){
+        ret = pthread_create(&dataQueue.threads[i], NULL, chat_processQueue, &chat_DataQueue);
+        if (ret < 0){
+            log_logError("Error initalizing thread", ERROR);
+            return -1;
+    }
+
+    snprintf(buff, ARRAY_SIZE(buff), "Successfully processing data on %d threads", numThreads);
+    log_logMessage(buff, INFO);
+
+    return numThreads;
+}
+
+void *chat_processQueue(void *param){
+    struct chat_DataQueue *dataQ = param;
+    struct timespec delay = {.tv_nsec = 1000000}; // 1ms
+    int ret = 0;
+
+    while(1) { 
+        pthread_mutex_lock(&dataQ->queueMutex);
+
+        //grab from first item in linked list
+
+        pthread_mutex_unlock(&dataQ->queueMutex);
+    }
+
+    return NULL;
 }
 
 //Same as other but uses name to find answer

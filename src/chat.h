@@ -52,7 +52,24 @@ struct chat_Channel {
 	pthread_mutex_t roomMutex;
 };
 
+struct chat_DataQueue {
+    struct link_List queue;
+    pthread_t *threads;
+    pthread_mutex_t queueMutex;
+};
+
 void chat_setMaxUsers(int max);
+
+int init_chat();
+
+void chat_close();
+
+// Process the queue's contents and then send data back
+// to the communication queue for sending back to clients
+void *chat_processQueue(void *param);
+
+// Setup threads for data processing
+int chat_setupDataThreads(struct fig_ConfigData *config);
 
 //Get a user's node in the main list by name
 struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]);

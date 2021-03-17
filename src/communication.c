@@ -45,10 +45,13 @@ int init_server(){
 
     // Allocate memory based on size from configuration
 	clientList = calloc(fig_Configuration.threads, sizeof(struct com_ClientList));
+    if (clientList == NULL) {
+        log_logError("Error initalizing clientList", ERROR);
+        return -1;
+    }
 
     //Setup threads for listening
     com_setupIOThreads(&fig_Configuration);
-    com_setupDataThreads(&fig_Configuration);
 
     //Plan on moving this out of the init function
 	com_acceptClients(&serverSockAddr);
@@ -188,7 +191,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 
 int com_setupIOThreads(struct fig_ConfigData *config){
 	char buff[BUFSIZ];
-    int numThreads = config->threads;
+    int numThreads = (config->threads / 2) + (config->threads % 2); // Half + remainder threads
 
 	// Setup data for the ClientList and then start its thread
 	int leftOver = config->clients % numThreads; // Get remaining spots for each thread
@@ -219,14 +222,6 @@ int com_setupIOThreads(struct fig_ConfigData *config){
 	log_logMessage(buff, INFO);
 
     return numThreads;
-}
-
-int com_setupDataThreads(struct fig_ConfigData *config){
-   //char buff[BUFSIZ];
-
-   //pthread_t threads[numThreads];
-
-   return config->threads;
 }
 
 int com_acceptClients(struct com_SocketInfo* sockAddr){

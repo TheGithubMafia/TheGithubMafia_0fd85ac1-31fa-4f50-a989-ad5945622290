@@ -6,6 +6,7 @@
 	4.2 binary search sockfd to com_SocketInfo
 	4.3 heartbeat from connections
 5. Chat - check all functions for bugs
+    5.1 chat_proccessData
 6. Channels
 
 

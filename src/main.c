@@ -10,10 +10,12 @@
 int main(){
 	atexit(log_close);
     atexit(com_close);
+    atexit(chat_close);
 
     init_config("example_config.conf"); /* config.h */
     init_logging(); /* logging.h */
     init_server(); /* communication.h */
+    init_chat();
 
 	//com_acceptClients(&sockAddr, &fig_Configuration);
 
