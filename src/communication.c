@@ -47,8 +47,8 @@ int init_server(){
 	clientList = calloc(fig_Configuration.threads, sizeof(struct com_ClientList));
 
     //Setup threads for listening
-    com_setupIOThreads(fig_Configuration.threads);
-    com_setupDataThreads(0);
+    com_setupIOThreads(&fig_Configuration);
+    com_setupDataThreads(&fig_Configuration);
 
     //Plan on moving this out of the init function
 	com_acceptClients(&serverSockAddr);
@@ -186,14 +186,15 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 	return -1;
 }
 
-int com_setupIOThreads(int numThreads){
+int com_setupIOThreads(struct fig_ConfigData *config){
 	char buff[BUFSIZ];
+    int numThreads = config->threads;
 
 	// Setup data for the ClientList and then start its thread
-	int leftOver = fig_Configuration.clients % numThreads; // Get remaining spots for each thread
+	int leftOver = config->clients % numThreads; // Get remaining spots for each thread
     int ret = 0;
 	for(int i = 0; i < numThreads; i++){
-		clientList[i].maxClients = fig_Configuration.clients / numThreads;
+		clientList[i].maxClients = config->clients / numThreads;
 		if(leftOver > 0){
 			clientList[i].maxClients++;
 			leftOver--;
@@ -220,12 +221,12 @@ int com_setupIOThreads(int numThreads){
     return numThreads;
 }
 
-int com_setupDataThreads(int numThreads){
+int com_setupDataThreads(struct fig_ConfigData *config){
    //char buff[BUFSIZ];
 
    //pthread_t threads[numThreads];
 
-   return numThreads;
+   return config->threads;
 }
 
 int com_acceptClients(struct com_SocketInfo* sockAddr){

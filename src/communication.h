@@ -57,10 +57,10 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 
 // Setup the threads to start listening for incoming communication and send
 // outbound data to clients
-int com_setupIOThreads(int numThreads);
+int com_setupIOThreads(struct fig_ConfigData *config);
 
 // Setup threads to handle data processing like parsing commands
-int com_setupDataThreads(int numThreads);
+int com_setupDataThreads(struct fig_ConfigData *config);
 
 //accept and handle all communication with clients
 int com_acceptClients(struct com_SocketInfo* sockAddr);
