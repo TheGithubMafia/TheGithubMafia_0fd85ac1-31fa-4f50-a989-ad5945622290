@@ -188,10 +188,10 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 
 int com_setupIOThreads(int numThreads){
 	char buff[BUFSIZ];
-    int ret = 0;
 
-	//Create threads and com_ClientList for each of the threads
+	// Setup data for the ClientList and then start its thread
 	int leftOver = fig_Configuration.clients % numThreads; // Get remaining spots for each thread
+    int ret = 0;
 	for(int i = 0; i < numThreads; i++){
 		clientList[i].maxClients = fig_Configuration.clients / numThreads;
 		if(leftOver > 0){
