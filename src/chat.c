@@ -99,6 +99,7 @@ int chat_parseInput(struct link_Node *node){
     pthread_mutex_lock(&user->userMutex);
    
     log_logMessage(user->input, MESSAGE);
+    memcpy(user->output, user->input, ARRAY_SIZE(user->output));
     com_insertQueue(node);
 
     pthread_mutex_unlock(&user->userMutex);
