@@ -16,6 +16,7 @@
 #include "chat.h"
 
 struct com_ClientList *clientList;
+struct com_DataQueue jobQueue;
 
 struct com_SocketInfo serverSockAddr;
 int com_serverSocket = -1;
@@ -50,11 +51,16 @@ int init_server(){
         return -1;
     }
 
+    // Initalize queue mutex to prevent locking issues
+    int ret = pthread_mutex_init(&jobQueue.queueMutex, NULL);
+    if (ret < 0){
+        log_logError("Error initalizing pthread_mutex", ERROR);
+        return -1;
+    }
+
     //Setup threads for listening
     com_setupIOThreads(&fig_Configuration);
 
-    //Plan on moving this out of the init function
-	com_acceptClients(&serverSockAddr);
     return 1;
 }
 
@@ -64,6 +70,17 @@ void com_close(){
     }
 
     free(clientList);
+}
+
+int com_insertQueue(struct link_Node *node){
+    pthread_mutex_lock(&jobQueue.queueMutex); 
+    struct link_Node *ret = link_add(&jobQueue.queue, node);
+    if(ret == NULL){
+        log_logMessage("Error adding job to queue", WARNING);
+    }
+    pthread_mutex_unlock(&jobQueue.queueMutex); 
+
+    return 1;
 }
 
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol){
@@ -88,10 +105,45 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 	return 0;
 }
 
+// Will determine if the specified socket fd is inside a pollfd struct
+// For use inside of a thread; Make sure to lock this externally if needed
+int com_hasSocket(int socket, struct pollfd *conns, int size){
+    for(int i = 0; i < size; i++){
+        if(conns[i].fd == socket){
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+// Find first avaliable job in the queue that the thread can use
+struct link_Node *com_findJob(struct com_DataQueue *dataQ, struct pollfd *conns, int size){
+	struct link_Node *node;
+	struct chat_UserData *user;
+
+    pthread_mutex_lock(&dataQ->queueMutex);
+	for(node = dataQ->queue.head; node != NULL; node = node->next){
+		user = (struct chat_UserData *) ((struct link_Node *) node->data)->data;
+		pthread_mutex_lock(&user->userMutex);
+
+        if(com_hasSocket(user->socketInfo.socket, conns, size) >= 0){
+            // TODO: remove the item from the list
+		    pthread_mutex_unlock(&user->userMutex);
+            pthread_mutex_unlock(&dataQ->queueMutex);
+            return node->data;
+        }
+		
+		pthread_mutex_unlock(&user->userMutex);
+	}
+    pthread_mutex_unlock(&dataQ->queueMutex);
+
+    return NULL;
+}
+
 void *com_communicateWithClients(void *param){
 	struct com_ClientList *clientList = param;
 	struct timespec delay = {.tv_nsec = 1000000}; // 1ms
-	char buff[BUFSIZ];
 	int ret;
 
     // Initalize the pollfd struct array
@@ -104,13 +156,21 @@ void *com_communicateWithClients(void *param){
         clientList->clients[x].events = POLLIN | POLLHUP;
     }
 
+	struct link_Node *node;
+	struct chat_UserData *user;
 	while(1){
 		pthread_mutex_lock(&clientList->clientListMutex);
+        node = com_findJob(&jobQueue, connections, ARRAY_SIZE(connections));
+        if(node != NULL){
+            user = (struct chat_UserData *) node->data;
+			write(user->socketInfo.socket, user->output, ARRAY_SIZE(user->output));
+        }
 
 		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
-            printf("HERE\n");
+            struct link_Node *node;
 			for(int i = 0; i < clientList->maxClients; i++){
+                int sockfd = clientList->clients[i].fd;
 				if(clientList->clients[i].revents & POLLERR){
 					log_logMessage("Client error", WARNING);
 					close(clientList->clients[i].fd);
@@ -124,8 +184,11 @@ void *com_communicateWithClients(void *param){
 					clientList->connected--;
 
 				} else if (clientList->clients[i].revents & POLLIN){
-					int bytes = read(clientList->clients[i].fd, buff, ARRAY_SIZE(buff));
-					buff[bytes] = '\0';
+                    // Really think about what to do if socket is not yet a user
+                    node = chat_getUserBySocket(sockfd);
+                    struct chat_UserData *user = (struct chat_UserData *) node->data;
+					int bytes = read(sockfd, user->input, ARRAY_SIZE(user->input));
+					user->input[bytes] = '\0';
 					if(bytes <= 0){
 						if(bytes == 0){
 							log_logMessage("Client disconnect", INFO);
@@ -137,7 +200,7 @@ void *com_communicateWithClients(void *param){
 						clientList->clients[i].fd = -1;
 						clientList->connected--;
 					} else {
-						log_logMessage(buff, MESSAGE);
+                        chat_insertQueue(node);
 					}
 				}
 			}
@@ -182,6 +245,9 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 		clientList[least].clients[selectedSpot].fd = addr.socket;
 		
 		pthread_mutex_unlock(&clientList[least].clientListMutex);
+
+        chat_createUser(&addr, "NOOB1");
+
 		return least;
 	}
 
@@ -224,7 +290,7 @@ int com_setupIOThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int com_acceptClients(struct com_SocketInfo* sockAddr){
+int com_acceptClients(){
 	char buff[BUFSIZ];
 
 	while(1){
@@ -233,14 +299,14 @@ int com_acceptClients(struct com_SocketInfo* sockAddr){
 
 		//Accept client's connection and log its IP
 		struct com_SocketInfo newCli;
-		int client = accept(sockAddr->socket, (struct sockaddr *)&cliAddr, &cliAddrSize);
+		int client = accept(serverSockAddr.socket, (struct sockaddr *)&cliAddr, &cliAddrSize);
 		if(client < 0){
 			log_logError("Error accepting client", WARNING);
 			continue;
 		}
 
 		char ipstr[INET6_ADDRSTRLEN];
-		if(!getHost(ipstr, cliAddr, sockAddr->addr.ss_family)){
+		if(!getHost(ipstr, cliAddr, serverSockAddr.addr.ss_family)){
 			strncpy(buff, "New client connected from: ", ARRAY_SIZE(buff));
 			strncat(buff, ipstr, ARRAY_SIZE(buff)-strlen(buff));
 			log_logMessage(buff, INFO);

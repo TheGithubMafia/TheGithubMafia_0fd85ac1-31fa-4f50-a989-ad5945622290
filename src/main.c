@@ -6,6 +6,7 @@
 #include "config.h"
 #include "communication.h"
 #include "linkedlist.h"
+#include "chat.h"
 
 int main(){
 	atexit(log_close);
@@ -15,9 +16,9 @@ int main(){
     init_config("example_config.conf"); /* config.h */
     init_logging(); /* logging.h */
     init_server(); /* communication.h */
-    init_chat();
+    init_chat(); /* chat.h */
 
-	//com_acceptClients(&sockAddr, &fig_Configuration);
+	com_acceptClients();
 
 	return 0;
 }

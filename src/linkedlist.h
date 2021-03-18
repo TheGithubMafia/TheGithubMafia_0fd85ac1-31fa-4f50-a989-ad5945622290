@@ -32,7 +32,7 @@ struct link_Node *link_add(struct link_List *list, void *data);
  * If the data had been set using malloc or
  * Equivalent
  */
-int link_remove(struct link_List *list, int pos, int freeData);
+void *link_remove(struct link_List *list, int pos);
 
 struct link_Node *link_getNode(struct link_List *list, int pos);
 

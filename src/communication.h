@@ -15,6 +15,7 @@
 #include <time.h>
 #include "logging.h"
 #include "config.h"
+#include "linkedlist.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
@@ -38,6 +39,12 @@ struct com_ClientList {
     pthread_mutex_t clientListMutex;
 };
 
+// Queue for the communication threads to get write jobs
+struct com_DataQueue {
+    struct link_List queue;
+    pthread_mutex_t queueMutex;
+};
+
 extern int com_serverSocket;
 
 // Setup the server's socket
@@ -46,8 +53,19 @@ int init_server();
 // close server socket
 void com_close();
 
+// Insert selected node into the queue for processing
+// Mutex is handled by this function internally
+int com_insertQueue(struct link_Node *node);
+
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
+
+// Will determine if the specified socket fd is inside a pollfd struct
+// For use inside inside of a thread; Make sure to lock mutex if needed
+int com_hasSocket(int socket, struct pollfd *conns, int size);
+
+//Find first avaliable job in the queue that the thread can use
+struct link_Node *com_findJob(struct com_DataQueue *dataQ, struct pollfd *conns, int size);
 
 // Handle all incoming data from the client
 void *com_communicateWithClients(void *param);
@@ -60,7 +78,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 int com_setupIOThreads(struct fig_ConfigData *config);
 
 //accept and handle all communication with clients
-int com_acceptClients(struct com_SocketInfo* sockAddr);
+int com_acceptClients();
 
 //start server socket based on configuration
 int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4);

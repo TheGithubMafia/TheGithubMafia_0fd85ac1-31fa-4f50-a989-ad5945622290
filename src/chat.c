@@ -44,10 +44,11 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     int ret = 0;
 
     for (int i = 0; i < numThreads; i++){
-        ret = pthread_create(&dataQueue.threads[i], NULL, chat_processQueue, &chat_DataQueue);
+        ret = pthread_create(&dataQueue.threads[i], NULL, chat_processQueue, &dataQueue);
         if (ret < 0){
             log_logError("Error initalizing thread", ERROR);
             return -1;
+        }
     }
 
     snprintf(buff, ARRAY_SIZE(buff), "Successfully processing data on %d threads", numThreads);
@@ -56,20 +57,53 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
+int chat_insertQueue(struct link_Node *node){
+    pthread_mutex_lock(&dataQueue.queueMutex); 
+    link_add(&dataQueue.queue, node);
+    pthread_mutex_unlock(&dataQueue.queueMutex); 
+
+    return 1;
+}
+
 void *chat_processQueue(void *param){
     struct chat_DataQueue *dataQ = param;
     struct timespec delay = {.tv_nsec = 1000000}; // 1ms
-    int ret = 0;
 
     while(1) { 
+        struct link_Node *node = NULL;
+
+        // grab from first item in linked list: expecting a link_Node of the user
+        // also make sure list isn't empty
         pthread_mutex_lock(&dataQ->queueMutex);
-
-        //grab from first item in linked list
-
+        if(link_isEmpty(&dataQ->queue) < 0){
+            node = link_remove(&dataQ->queue, 0);
+        }
         pthread_mutex_unlock(&dataQ->queueMutex);
+
+        // Nothing to process
+        if(node == NULL){
+            nanosleep(&delay, NULL); // Allow other threads time to access mutex
+            continue;
+        }
+
+        chat_parseInput(node); 
     }
 
     return NULL;
+}
+
+int chat_parseInput(struct link_Node *node){
+    struct chat_UserData *user;
+    user = (struct chat_UserData *) node->data;
+
+    pthread_mutex_lock(&user->userMutex);
+   
+    log_logMessage(user->input, MESSAGE);
+    com_insertQueue(node);
+
+    pthread_mutex_unlock(&user->userMutex);
+
+    return 1;
 }
 
 //Same as other but uses name to find answer

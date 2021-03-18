@@ -34,6 +34,8 @@ struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
 	char name[NICKNAME_LENGTH];
+    char input[1024];
+    char output[1024];
 	pthread_mutex_t userMutex;
 };
 
@@ -64,12 +66,19 @@ int init_chat();
 
 void chat_close();
 
+// Setup threads for data processing
+int chat_setupDataThreads(struct fig_ConfigData *config);
+
+// Insert selected node into the queue for processing
+// Mutex is handled by this function internally
+int chat_insertQueue(struct link_Node *node);
+
 // Process the queue's contents and then send data back
 // to the communication queue for sending back to clients
 void *chat_processQueue(void *param);
 
-// Setup threads for data processing
-int chat_setupDataThreads(struct fig_ConfigData *config);
+// Parse the input from a user and act on it
+int chat_parseInput(struct link_Node *node);
 
 //Get a user's node in the main list by name
 struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]);
@@ -80,7 +89,7 @@ struct link_Node *chat_getUserById(size_t id);
 //Get a user's node in the main list by Socket FD
 struct link_Node *chat_getUserBySocket(int sock);
 
-//Create a new user based, but only if it doesn't already exist
+//Create a new user, but only if it doesn't already exist
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
 
 // Returns the node to a new user, also automatically adds the user to the main list

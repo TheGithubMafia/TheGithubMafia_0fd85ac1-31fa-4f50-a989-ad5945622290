@@ -33,10 +33,10 @@ struct link_Node *link_add(struct link_List *list, void *data){
 	return node;
 }
 
-int link_remove(struct link_List *list, int pos, int freeData){
+void *link_remove(struct link_List *list, int pos){
 	if(!link_isEmpty(list)){
 		log_logMessage("List is empty: can't remove element", DEBUG);
-		return -1;
+		return NULL;
 	}
 
 	struct link_Node *node = link_getNode(list, pos);
@@ -44,8 +44,9 @@ int link_remove(struct link_List *list, int pos, int freeData){
 		char buff[100];
 		snprintf(buff, ARRAY_SIZE(buff), "Position %d does not exist", pos);
 		log_logMessage(buff, DEBUG);
-		return -1;
+		return NULL;
 	}
+    void *data = node->data;;
 
 	//Change pointers of elements in front and behind it
 	if(node->next != NULL){
@@ -65,12 +66,9 @@ int link_remove(struct link_List *list, int pos, int freeData){
 		list->tail = node->prev;	
 	}
 
-	if(freeData){
-		free(node->data);
-	}
 	free(node);
 	list->size--;
-	return 0;
+	return data;
 }
 
 struct link_Node *link_getNode(struct link_List *list, int pos){
