@@ -3,10 +3,10 @@
 3. Socket connections
 4. handle communication
 	4.1 secure communication
-	4.2 binary search sockfd to com_SocketInfo
-	4.3 heartbeat from connections
+	4.2 heartbeat from connections
+    4.3 create user upon connection 
 5. Chat - check all functions for bugs
-    5.1 chat_proccessData
+    5.1 - Review all functions 
 6. Channels
 
 
