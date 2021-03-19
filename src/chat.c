@@ -16,9 +16,14 @@ void chat_setMaxUsers(int max){
 }
 
 int init_chat(){
+    //Check that the config data is correct
+	if(fig_Configuration.threadsDATA < 1){
+		fig_Configuration.threadsDATA = 1;
+		log_logMessage("Must have at least 1 data thread! Using 1 data thread", WARNING);
+	}	
+
     // Allocate threads for processing user input 
-    // Divide by two to use half of the avaliable threads
-    dataQueue.threads = calloc(fig_Configuration.threads / 2, sizeof(pthread_t)); 
+    dataQueue.threads = calloc(fig_Configuration.threadsDATA, sizeof(pthread_t)); 
     if (dataQueue.threads == NULL){
         log_logError("Error initalizing dataQueue.threads", ERROR);
         return -1;
@@ -40,7 +45,7 @@ void chat_close(){
 
 int chat_setupDataThreads(struct fig_ConfigData *config){
     char buff[BUFSIZ];
-    int numThreads = (config->threads / 2); // Half of threads
+    int numThreads = config->threadsDATA;
     int ret = 0;
 
     for (int i = 0; i < numThreads; i++){

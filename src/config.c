@@ -106,7 +106,8 @@ void fig_parseLine(char *line){
 			fig_Configuration.threadsDATA = (totalThreads / 2); 
 			if(errno != 0){
 				log_logError("Error converting string to int: threads", WARNING);
-				fig_Configuration.threads = 0;
+				fig_Configuration.threadsIO = 0;
+				fig_Configuration.threadsDATA = 0;
 			}
 			break;
 

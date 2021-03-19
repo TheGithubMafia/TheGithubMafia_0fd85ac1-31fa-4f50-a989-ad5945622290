@@ -23,6 +23,12 @@
  * Sending and receiving of data that the server will handle
  */
 
+// Queue for the communication threads to get write jobs
+struct com_DataQueue {
+    struct link_List queue;
+    pthread_mutex_t queueMutex;
+};
+
 //struct to store data about the socket, and its file descriptor
 struct com_SocketInfo {
 	int socket;
@@ -37,12 +43,7 @@ struct com_ClientList {
 	struct pollfd *clients; /* pollfd array for poll() */
     pthread_t thread;
     pthread_mutex_t clientListMutex;
-};
-
-// Queue for the communication threads to get write jobs
-struct com_DataQueue {
-    struct link_List queue;
-    pthread_mutex_t queueMutex;
+    struct com_DataQueue jobs;
 };
 
 extern int com_serverSocket;
@@ -53,7 +54,7 @@ int init_server();
 // close server socket
 void com_close();
 
-// Insert selected node into the queue for processing
+// Insert selected node into the correct queue for processing
 // Mutex is handled by this function internally
 int com_insertQueue(struct link_Node *node);
 
@@ -65,7 +66,7 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 int com_hasSocket(int socket, struct pollfd *conns, int size);
 
 //Find first avaliable job in the queue that the thread can use
-struct link_Node *com_findJob(struct com_DataQueue *dataQ, struct pollfd *conns, int size);
+int com_hasJob(struct com_DataQueue *dataQ, int sockfd);
 
 // Handle all incoming data from the client
 void *com_communicateWithClients(void *param);

@@ -16,7 +16,6 @@
 #include "chat.h"
 
 struct com_ClientList *clientList;
-struct com_DataQueue jobQueue;
 
 struct com_SocketInfo serverSockAddr;
 int com_serverSocket = -1;
@@ -33,9 +32,9 @@ int init_server(){
 	}
 
     //Check that the config data is correct
-	if(fig_Configuration.threads <= 1){
-		fig_Configuration.threads = 2;
-		log_logMessage("Must have at least 2 threads! Using 2 threads", WARNING);
+	if(fig_Configuration.threadsIO < 1){
+		fig_Configuration.threadsIO = 1;
+		log_logMessage("Must have at least 1 IO thread! Using 1 IO thread", WARNING);
 	}	
 
 	if(fig_Configuration.clients <= 0){
@@ -45,17 +44,19 @@ int init_server(){
 	chat_setMaxUsers(fig_Configuration.clients);
 
     // Allocate memory based on size from configuration
-	clientList = calloc(fig_Configuration.threads, sizeof(struct com_ClientList));
+	clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
     if (clientList == NULL) {
         log_logError("Error initalizing clientList", ERROR);
         return -1;
     }
 
     // Initalize queue mutex to prevent locking issues
-    int ret = pthread_mutex_init(&jobQueue.queueMutex, NULL);
-    if (ret < 0){
-        log_logError("Error initalizing pthread_mutex", ERROR);
-        return -1;
+    for (int i = 0; i < fig_Configuration.threadsIO; i++){
+        int ret = pthread_mutex_init(&clientList[i].jobs.queueMutex, NULL);
+        if (ret < 0){
+            log_logError("Error initalizing pthread_mutex", ERROR);
+            return -1;
+        }
     }
 
     //Setup threads for listening
@@ -73,12 +74,30 @@ void com_close(){
 }
 
 int com_insertQueue(struct link_Node *node){
-    pthread_mutex_lock(&jobQueue.queueMutex); 
-    struct link_Node *ret = link_add(&jobQueue.queue, node);
-    if(ret == NULL){
-        log_logMessage("Error adding job to queue", WARNING);
+    struct com_ClientList *cliList = NULL;
+    struct chat_UserData *user = (struct chat_UserData *) node->data;
+    int sockfd = user->socketInfo.socket;
+
+    // Search through each pollfd struct to find the correct queue to insert job
+    for(int i = 0; i < fig_Configuration.threadsIO; i++) {
+        cliList = &clientList[i];
+
+        pthread_mutex_lock(&cliList->clientListMutex); 
+
+        if(com_hasSocket(sockfd, cliList->clients, cliList->maxClients) >= 0){
+            pthread_mutex_lock(&cliList->jobs.queueMutex); 
+            struct link_Node *ret = link_add(&cliList->jobs.queue, node);
+            if(ret == NULL){
+                log_logMessage("Error adding job to queue", WARNING);
+            }
+            pthread_mutex_unlock(&cliList->jobs.queueMutex); 
+
+            pthread_mutex_unlock(&cliList->clientListMutex); 
+            break;
+        }
+
+        pthread_mutex_unlock(&cliList->clientListMutex); 
     }
-    pthread_mutex_unlock(&jobQueue.queueMutex); 
 
     return 1;
 }
@@ -117,28 +136,27 @@ int com_hasSocket(int socket, struct pollfd *conns, int size){
     return -1;
 }
 
-// Find first avaliable job in the queue that the thread can use
-struct link_Node *com_findJob(struct com_DataQueue *dataQ, struct pollfd *conns, int size){
-	struct link_Node *node;
-	struct chat_UserData *user;
+// Will return location of job if true, else -1
+int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
+    struct link_Node *node = NULL;
+    struct chat_UserData *user = NULL;
+    int loc = 0;
 
-    pthread_mutex_lock(&dataQ->queueMutex);
-	for(node = dataQ->queue.head; node != NULL; node = node->next){
-		user = (struct chat_UserData *) ((struct link_Node *) node->data)->data;
-		pthread_mutex_lock(&user->userMutex);
+    pthread_mutex_lock(&dataQ->queueMutex); 
 
-        if(com_hasSocket(user->socketInfo.socket, conns, size) >= 0){
-            // TODO: remove the item from the list
-		    pthread_mutex_unlock(&user->userMutex);
-            pthread_mutex_unlock(&dataQ->queueMutex);
-            return node->data;
+    for(node = dataQ->queue.head; node != NULL; node = node->next){
+        user = ((struct link_Node *) node->data)->data;
+
+        if(user->socketInfo.socket == sockfd){
+            pthread_mutex_unlock(&dataQ->queueMutex); 
+            return loc;
         }
-		
-		pthread_mutex_unlock(&user->userMutex);
-	}
-    pthread_mutex_unlock(&dataQ->queueMutex);
 
-    return NULL;
+        loc++;
+    }
+
+    pthread_mutex_unlock(&dataQ->queueMutex); 
+    return -1;
 }
 
 void *com_communicateWithClients(void *param){
@@ -153,22 +171,16 @@ void *com_communicateWithClients(void *param){
     // Settings for each pollfd struct
     for(int x = 0; x < clientList->maxClients; x++){
         clientList->clients[x].fd = -1;
-        clientList->clients[x].events = POLLIN | POLLHUP;
+        clientList->clients[x].events = POLLIN | POLLHUP | POLLOUT;
     }
 
-	struct link_Node *node;
 	struct chat_UserData *user;
+    struct link_Node *node;
 	while(1){
 		pthread_mutex_lock(&clientList->clientListMutex);
-        node = com_findJob(&jobQueue, connections, ARRAY_SIZE(connections));
-        if(node != NULL){
-            user = (struct chat_UserData *) node->data;
-			write(user->socketInfo.socket, user->output, ARRAY_SIZE(user->output));
-        }
 
 		ret = poll(clientList->clients, clientList->maxClients, 50);
 		if(ret != 0){
-            struct link_Node *node;
 			for(int i = 0; i < clientList->maxClients; i++){
                 int sockfd = clientList->clients[i].fd;
 				if(clientList->clients[i].revents & POLLERR){
@@ -202,7 +214,22 @@ void *com_communicateWithClients(void *param){
 					} else {
                         chat_insertQueue(node);
 					}
-				}
+				} else if (clientList->clients[i].revents & POLLOUT){
+                    int jobLoc = com_hasJob(&clientList->jobs, clientList->clients[i].fd);
+
+                    // User is in job list
+                    if(jobLoc >= 0){
+                        pthread_mutex_lock(&clientList->jobs.queueMutex); 
+                        node = link_remove(&clientList->jobs.queue, jobLoc);
+                        user = node->data;
+                        pthread_mutex_unlock(&clientList->jobs.queueMutex); 
+
+                        if(node != NULL && user != NULL){
+                            write(user->socketInfo.socket, user->output, ARRAY_SIZE(user->output));
+                        }
+                    }
+
+                }
 			}
 		} else if (ret < 0) {
 			log_logError("Error with poll()", ERROR);
@@ -257,7 +284,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
 
 int com_setupIOThreads(struct fig_ConfigData *config){
 	char buff[BUFSIZ];
-    int numThreads = (config->threads / 2) + (config->threads % 2); // Half + remainder threads
+    int numThreads = config->threadsIO;
 
 	// Setup data for the ClientList and then start its thread
 	int leftOver = config->clients % numThreads; // Get remaining spots for each thread
@@ -316,7 +343,7 @@ int com_acceptClients(){
 		newCli.socket = client;
 		memcpy(&newCli.addr, &cliAddr, cliAddrSize);
 
-		int ret = com_insertClient(newCli, clientList, fig_Configuration.threads);
+		int ret = com_insertClient(newCli, clientList, fig_Configuration.threadsIO);
 		if(ret < 0){
 			snprintf(buff, ARRAY_SIZE(buff), "Server is full");
 			send(client, buff, strlen(buff), 0);
