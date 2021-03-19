@@ -100,7 +100,10 @@ void fig_parseLine(char *line){
 		case 3:
 			//num threads
 			errno = 0;
-			fig_Configuration.threads = strtol(words[1], NULL, 10);
+            int totalThreads = strtol(words[1], NULL, 10);
+            // Half threads for each, except IO gets the remainder
+			fig_Configuration.threadsIO = (totalThreads / 2) + (totalThreads % 2); 
+			fig_Configuration.threadsDATA = (totalThreads / 2); 
 			if(errno != 0){
 				log_logError("Error converting string to int: threads", WARNING);
 				fig_Configuration.threads = 0;
