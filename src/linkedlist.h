@@ -28,9 +28,7 @@ int link_isEmpty(struct link_List *list);
 struct link_Node *link_add(struct link_List *list, void *data);
 
 /*
- * When using link_remove() only set freeData to 1
- * If the data had been set using malloc or
- * Equivalent
+ * Returns the pointer to the data
  */
 void *link_remove(struct link_List *list, int pos);
 
