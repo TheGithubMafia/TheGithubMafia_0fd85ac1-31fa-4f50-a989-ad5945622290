@@ -19,10 +19,12 @@
 	inside the main list so that one free() will notify
 	all other pointers that the user no longer exists
 */
-struct chat_AllUsers {
+struct chat_ServerLists {
 	int max;
 	struct link_List users;	
-	pthread_mutex_t allUsersMutex;
+	pthread_mutex_t usersMutex;
+	struct link_List servers;	
+	pthread_mutex_t serversMutex;
 };
 
 // Data about an user

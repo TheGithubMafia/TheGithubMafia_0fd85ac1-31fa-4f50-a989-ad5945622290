@@ -6,13 +6,13 @@
 #include "chat.h"
 #include "linkedlist.h"
 
-struct chat_AllUsers allUsers = {0};
+struct chat_ServerLists serverLists = {0};
 size_t chat_globalUserID = 0;
 
 struct chat_DataQueue dataQueue;
 
 void chat_setMaxUsers(int max){
-	allUsers.max = max;
+	serverLists.max = max;
 }
 
 int init_chat(){
@@ -117,9 +117,9 @@ struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
 	struct link_Node *node;
 	struct chat_UserData *user;
 
-	pthread_mutex_lock(&allUsers.allUsersMutex);
+	pthread_mutex_lock(&serverLists.usersMutex);
 
-	for(node = allUsers.users.head; node != NULL; node = node->next){
+	for(node = serverLists.users.head; node != NULL; node = node->next){
 		user = node->data;
 		pthread_mutex_lock(&user->userMutex);
 
@@ -130,64 +130,64 @@ struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
 			}
 
 			pthread_mutex_unlock(&user->userMutex);
-			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			pthread_mutex_unlock(&serverLists.usersMutex);
 			return node;
 		}
 		
 		pthread_mutex_unlock(&user->userMutex);
 	}
 
-	pthread_mutex_unlock(&allUsers.allUsersMutex);
+	pthread_mutex_unlock(&serverLists.usersMutex);
 
 	return NULL;
 }
 
-//Find the user in the allUsers list using the user id
+//Find the user in the serverLists list using the user id
 struct link_Node *chat_getUserBySocket(int sock){
 	struct link_Node *node;
 	struct chat_UserData *user;
 
-	pthread_mutex_lock(&allUsers.allUsersMutex);
+	pthread_mutex_lock(&serverLists.usersMutex);
 
-	for(node = allUsers.users.head; node != NULL; node = node->next){
+	for(node = serverLists.users.head; node != NULL; node = node->next){
 		user = node->data;
 		pthread_mutex_lock(&user->userMutex);
 
 		if(user->socketInfo.socket == sock){
 			pthread_mutex_unlock(&user->userMutex);
-			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			pthread_mutex_unlock(&serverLists.usersMutex);
 			return node;
 		}
 
 		pthread_mutex_unlock(&user->userMutex);
 	}
 
-	pthread_mutex_unlock(&allUsers.allUsersMutex);
+	pthread_mutex_unlock(&serverLists.usersMutex);
 
 	return NULL;
 }
 
-//Find the user in the allUsers list using the user id
+//Find the user in the serverLists list using the user id
 struct link_Node *chat_getUserById(size_t id){
 	struct link_Node *node;
 	struct chat_UserData *user;
 
-	pthread_mutex_lock(&allUsers.allUsersMutex);
+	pthread_mutex_lock(&serverLists.usersMutex);
 
-	for(node = allUsers.users.head; node != NULL; node = node->next){
+	for(node = serverLists.users.head; node != NULL; node = node->next){
 		user = node->data;
 		pthread_mutex_lock(&user->userMutex);
 
 		if(user->id == id){
 			pthread_mutex_unlock(&user->userMutex);
-			pthread_mutex_unlock(&allUsers.allUsersMutex);
+			pthread_mutex_unlock(&serverLists.usersMutex);
 			return node;
 		}
 
 		pthread_mutex_unlock(&user->userMutex);
 	}
 
-	pthread_mutex_unlock(&allUsers.allUsersMutex);
+	pthread_mutex_unlock(&serverLists.usersMutex);
 
 	return NULL;
 }
@@ -213,19 +213,19 @@ struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NICK
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
 	struct chat_UserData *user;
 
-	pthread_mutex_lock(&allUsers.allUsersMutex);
+	pthread_mutex_lock(&serverLists.usersMutex);
 	//Plan to remove this maxUser check because it should be only
 	//for connected users
-	if(allUsers.users.size >= allUsers.max){
+	if(serverLists.users.size >= serverLists.max){
 		log_logMessage("Server is full", WARNING);
-		pthread_mutex_unlock(&allUsers.allUsersMutex);	
+		pthread_mutex_unlock(&serverLists.usersMutex);	
 		return NULL;
 	}
 
 	user = malloc(sizeof(struct chat_UserData));
 	if(user == NULL){
 		log_logError("Error adding user", ERROR);
-		pthread_mutex_unlock(&allUsers.allUsersMutex);	
+		pthread_mutex_unlock(&serverLists.usersMutex);	
 		return NULL;
 	}
 	//Set user's data
@@ -235,9 +235,9 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 	strncpy(user->name, name, NICKNAME_LENGTH-1);
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 
-	struct link_Node *userNode = link_add(&allUsers.users, user);
+	struct link_Node *userNode = link_add(&serverLists.users, user);
 
-	pthread_mutex_unlock(&allUsers.allUsersMutex);	
+	pthread_mutex_unlock(&serverLists.usersMutex);	
 
 	return userNode;
 }
