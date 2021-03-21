@@ -9,7 +9,7 @@
 #include "linkedlist.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
-#define NICKNAME_LENGTH 10
+#define NICKNAME_LENGTH 9
 #define CHANNEL_NAME_LENGTH 201
 
 /*  Note about the structure of the users
@@ -35,7 +35,7 @@ struct chat_ServerLists {
 struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
-	char name[NICKNAME_LENGTH];
+	char nickname[NICKNAME_LENGTH + 1];
     char input[1024];
     char output[1024];
 	pthread_mutex_t userMutex;
@@ -53,13 +53,20 @@ struct chat_Channel {
 	size_t id;
 	char name[CHANNEL_NAME_LENGTH];
 	struct link_List users;
-	pthread_mutex_t roomMutex;
+	pthread_mutex_t channelMutex;
 };
 
 struct chat_DataQueue {
     struct link_List queue;
     pthread_t *threads;
     pthread_mutex_t queueMutex;
+};
+
+struct chat_Message {
+    char prefix[50];
+    char command[50];
+    int paramCount;
+    char params[15][50];
 };
 
 void chat_setMaxUsers(int max);
@@ -82,6 +89,9 @@ void *chat_processQueue(void *param);
 // Parse the input from a user and act on it
 int chat_parseInput(struct link_Node *node);
 
+// Locate the next space character
+int chat_findNextSpace(int starting, int size, char *str);
+
 //Get a user's node in the main list by name
 struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]);
 
@@ -97,7 +107,7 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
 
-// Places a double pointer to the user into the Channel's list
+// Places a pointer to the user into the Channel's list
 struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user);
 
 // Sends a message to all online users in this room

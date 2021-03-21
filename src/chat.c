@@ -97,19 +97,73 @@ void *chat_processQueue(void *param){
     return NULL;
 }
 
+// TODO - Support multiple cmds in one read
+// TODO - Handle null bytes? also handle MAJOR issues with memcpy (size of copied)
 int chat_parseInput(struct link_Node *node){
     struct chat_UserData *user;
     user = (struct chat_UserData *) node->data;
+    struct chat_Message cmd = {0};
 
-    pthread_mutex_lock(&user->userMutex);
-   
+    pthread_mutex_lock(&user->userMutex); 
+
     log_logMessage(user->input, MESSAGE);
-    memcpy(user->output, user->input, ARRAY_SIZE(user->output));
-    com_insertQueue(node);
 
+    // Find where the message ends (\r or \n); if not supplied just take the very end of the buffer
+    int length = ARRAY_SIZE(user->input) - 1;
+    int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
+    for (int i = 0; i < ARRAY_SIZE(user->input); i++){
+        if(user->input[i] == '\n' || user->input[i] == '\r'){
+            length = i+1;
+            user->input[i] = ' ';
+            break;
+        }
+    }
+
+    if(user->input[0] == ':'){
+       loc = chat_findNextSpace(0, length, user->input);
+       if (loc > -1){
+           memcpy(cmd.prefix, &user->input[1], loc - 1); // Copy everything except for the ':'
+           currentPos = loc + 1;
+       }
+    }
+
+    loc = chat_findNextSpace(currentPos, length, user->input); 
+    if (loc >= 0){
+        memcpy(cmd.command, &user->input[currentPos], loc - currentPos);
+        currentPos = loc + 1;
+    }
+
+    // Fill in up to 15 params
+    while (loc > -1 && cmd.paramCount < 15){
+       loc = chat_findNextSpace(currentPos, length, user->input);
+       if (loc >= 0){
+            memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], loc - currentPos);
+            currentPos = loc +1;
+            cmd.paramCount++;
+       }
+    }
+
+    snprintf(user->output, ARRAY_SIZE(user->output), "invalid command\r\n");
+    if(strncmp(cmd.command, "NICK", ARRAY_SIZE(cmd.command)) == 0){
+        strncpy(user->nickname, cmd.params[0], NICKNAME_LENGTH);
+        snprintf(user->output, ARRAY_SIZE(user->output), ":localhost 001 %s :Welcome to server\r\n", cmd.params[0]);
+    }
+
+    com_insertQueue(node);
     pthread_mutex_unlock(&user->userMutex);
 
     return 1;
+}
+
+// Locate the next space character 
+int chat_findNextSpace(int starting, int size, char *str){
+    for(int i = starting; i < size; i++){
+        if(str[i] == ' ' || str[i] == '\n' || str[i] == '\r'){
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 //Same as other but uses name to find answer
@@ -124,8 +178,8 @@ struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
 		pthread_mutex_lock(&user->userMutex);
 
 		//compare the names letter by letter
-		for(int i = 0; i < ARRAY_SIZE(user->name); i++){
-			if(user->name[i] != name[i]){
+		for(int i = 0; i < ARRAY_SIZE(user->nickname); i++){
+			if(user->nickname[i] != name[i]){
 				break;
 			}
 
@@ -232,7 +286,7 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 	memset(user, 0, sizeof(struct chat_UserData));
 	//eventually get this id from saved user data
 	user->id = chat_globalUserID++;
-	strncpy(user->name, name, NICKNAME_LENGTH-1);
+	strncpy(user->nickname, name, NICKNAME_LENGTH);
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 
 	struct link_Node *userNode = link_add(&serverLists.users, user);
@@ -242,16 +296,16 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 	return userNode;
 }
 
-// Add a user to a room from their node on the main user list
-struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user){
-	pthread_mutex_lock(&room->roomMutex);
-	struct link_Node *ret = link_add(&room->users, &user->data);
-	pthread_mutex_unlock(&room->roomMutex);
+// Add a user to a channel from their node on the main user list
+struct link_Node *chat_addToChannel(struct chat_Channel *channel, struct link_Node *user){
+	pthread_mutex_lock(&channel->channelMutex);
+	struct link_Node *ret = link_add(&channel->users, user);
+	pthread_mutex_unlock(&channel->channelMutex);
 
 	return ret;
 }
 
-// Make the double pointer work so that it will become null when the user is invalid
+// TODO - rewrite to add users to the queue
 int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize){
 	struct link_Node *node;
 	struct chat_UserData **user;
@@ -262,7 +316,7 @@ int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize){
 		return -1;
 	}
 
-	pthread_mutex_lock(&room->roomMutex);
+	pthread_mutex_lock(&room->channelMutex);
 	// Loop through each user in the room and send them the message
 	for(node = room->users.head; node != NULL; node = node->next){
 		user = (struct chat_UserData **)node->data;
@@ -287,7 +341,7 @@ int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize){
 		pthread_mutex_unlock(&(**user).userMutex);
 	}
 
-	pthread_mutex_unlock(&room->roomMutex);
+	pthread_mutex_unlock(&room->channelMutex);
 
 	return 0;
 }
