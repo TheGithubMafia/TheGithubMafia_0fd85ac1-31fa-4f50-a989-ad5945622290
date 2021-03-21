@@ -225,7 +225,7 @@ void *com_communicateWithClients(void *param){
                         pthread_mutex_unlock(&clientList->jobs.queueMutex); 
 
                         if(node != NULL && user != NULL){
-                            write(user->socketInfo.socket, user->output, ARRAY_SIZE(user->output));
+                            write(user->socketInfo.socket, user->output, strlen(user->output));
                         }
                     }
 
