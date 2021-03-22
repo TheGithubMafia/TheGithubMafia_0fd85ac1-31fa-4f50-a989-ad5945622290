@@ -45,7 +45,7 @@ struct chat_UserData {
 struct chat_Server {
 	size_t id;
 	char name[50];
-	struct link_List users, rooms;
+	struct link_List users, channels;
 	pthread_mutex_t serverMutex;
 };
 
@@ -89,6 +89,9 @@ void *chat_processQueue(void *param);
 // Parse the input from a user and act on it
 int chat_parseInput(struct link_Node *node);
 
+// Goes thru a message struct and determines what to di
+int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd);
+
 // Locate the next space character
 int chat_findNextSpace(int starting, int size, char *str);
 
@@ -107,7 +110,10 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
 
-// Places a pointer to the user into the Channel's list
+// Create a channel with the specified name
+struct link_Node *chat_createChannel(char *name, struct chat_Server *server);
+
+// Places a pointer to the user into the Channel's list, and create it if needed
 struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user);
 
 // Sends a message to all online users in this room

@@ -73,6 +73,17 @@ void com_close(){
     free(clientList);
 }
 
+int com_sendStr(struct link_Node *node, char *msg){
+    struct chat_UserData *user = (struct chat_UserData *) node->data;
+
+    pthread_mutex_lock(&user->userMutex);
+    snprintf(user->output, ARRAY_SIZE(user->output), "%s\r\n", msg);
+    com_insertQueue(node);
+    pthread_mutex_unlock(&user->userMutex);
+
+    return 1;
+}
+
 int com_insertQueue(struct link_Node *node){
     struct com_ClientList *cliList = NULL;
     struct chat_UserData *user = (struct chat_UserData *) node->data;

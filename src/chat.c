@@ -137,20 +137,57 @@ int chat_parseInput(struct link_Node *node){
     while (loc > -1 && cmd.paramCount < 15){
        loc = chat_findNextSpace(currentPos, length, user->input);
        if (loc >= 0){
+            if(user->input[currentPos] == ':'){ // Colon means rest of string is together
+                memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], length - currentPos);
+                break;
+            }
+
             memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], loc - currentPos);
             currentPos = loc +1;
             cmd.paramCount++;
        }
     }
 
-    snprintf(user->output, ARRAY_SIZE(user->output), "invalid command\r\n");
-    if(strncmp(cmd.command, "NICK", ARRAY_SIZE(cmd.command)) == 0){
-        strncpy(user->nickname, cmd.params[0], NICKNAME_LENGTH);
-        snprintf(user->output, ARRAY_SIZE(user->output), ":localhost 001 %s :Welcome to server\r\n", cmd.params[0]);
-    }
-
-    com_insertQueue(node);
     pthread_mutex_unlock(&user->userMutex);
+
+    return chat_executeMessage(node, &cmd);
+
+}
+
+// Goes thru a message struct and determines what to do
+int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
+    struct chat_UserData *user;
+    user = (struct chat_UserData *) node->data;
+    char buff[BUFSIZ], nickname[NICKNAME_LENGTH];
+
+    pthread_mutex_lock(&user->userMutex);
+    memcpy(nickname, user->nickname, NICKNAME_LENGTH); 
+    pthread_mutex_unlock(&user->userMutex);
+
+    if(memcmp(cmd->command, "NICK", 4) == 0){
+        pthread_mutex_lock(&user->userMutex);
+        strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
+        pthread_mutex_unlock(&user->userMutex);
+
+        snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com 001 %s :Welcome to server", cmd->params[0]);
+        com_sendStr(node, buff);
+
+        return 1;
+    } else if(memcmp(cmd->command, "PRIVMSG", 7) == 0) {
+        struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
+
+        if(otherUserNode == NULL){
+            snprintf(buff, ARRAY_SIZE(buff), "invalid user %s", cmd->params[0]);
+            com_sendStr(node, buff);
+            return -1;
+        }
+
+        snprintf(buff, ARRAY_SIZE(buff), ":%s PRIVMSG %s %s", nickname, cmd->params[0], cmd->params[1]);
+        com_sendStr(otherUserNode, buff); 
+        return 1;
+    } 
+
+    com_sendStr(node, "Invalid command");
 
     return 1;
 }
@@ -294,6 +331,27 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 	pthread_mutex_unlock(&serverLists.usersMutex);	
 
 	return userNode;
+}
+
+// Create a channel with the specified name
+// TODO - add further channel properties
+struct link_Node *chat_createChannel(char *name, struct chat_Server *server){
+    struct chat_Channel *channel;
+
+    channel = malloc(sizeof(struct chat_Channel));
+    if(channel == NULL){
+        log_logError("Error creating channel", ERROR);
+        return NULL;
+    }
+
+    // TODO - make sure name is legal
+    strncpy(channel->name, name, CHANNEL_NAME_LENGTH);
+
+    pthread_mutex_lock(&server->serverMutex);
+    struct link_Node *node = link_add(&server->channels, channel);
+    pthread_mutex_lock(&server->serverMutex);
+
+    return node;
 }
 
 // Add a user to a channel from their node on the main user list

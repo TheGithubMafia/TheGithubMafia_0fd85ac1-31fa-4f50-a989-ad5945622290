@@ -54,6 +54,9 @@ int init_server();
 // close server socket
 void com_close();
 
+// Will send a string to client inside node, also appends \r\n
+int com_sendStr(struct link_Node *node, char *msg);
+
 // Insert selected node into the correct queue for processing
 // Mutex is handled by this function internally
 int com_insertQueue(struct link_Node *node);
