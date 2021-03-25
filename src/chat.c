@@ -165,11 +165,18 @@ int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
     pthread_mutex_unlock(&user->userMutex);
 
     if(memcmp(cmd->command, "NICK", 4) == 0){
-        pthread_mutex_lock(&user->userMutex);
-        strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
-        pthread_mutex_unlock(&user->userMutex);
+        struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
 
-        snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com 001 %s :Welcome to server", cmd->params[0]);
+		if(otherUserNode == NULL) {
+			pthread_mutex_lock(&user->userMutex);
+			strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
+			pthread_mutex_unlock(&user->userMutex);
+        
+			snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com 001 %s :Welcome to server", cmd->params[0]);
+		} else {
+			snprintf(buff, ARRAY_SIZE(buff), "nickname in use: %s", cmd->params[0]);
+		}
+
         com_sendStr(node, buff);
 
         return 1;
