@@ -118,6 +118,11 @@ int chat_parseInput(struct link_Node *node){
             user->input[i] = ' ';
             break;
         }
+
+	// Remove any non-printable characters
+	if(iscntrl(user->input[i]) == 1){
+		user->input[i] = ' ';
+	}
     }
 
     if(user->input[0] == ':'){
@@ -156,6 +161,7 @@ int chat_parseInput(struct link_Node *node){
 }
 
 // Goes thru a message struct and determines what to do
+// TODO - Plan to replace the if-else with hashmap that gives function pointers
 int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
     struct chat_UserData *user;
     user = (struct chat_UserData *) node->data;
@@ -167,22 +173,27 @@ int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
     pthread_mutex_unlock(&user->userMutex);
 
     if(memcmp(cmd->command, "NICK", 4) == 0){
+	if(cmd->params[0][0] == '\0'){
+		char *params[] = {":Usage: NICK <nickname>"};
+		chat_createMessage(&reply, ":roundtable.example.com", ERR_NONICKNAMEGIVEN, params, 1);
+		chat_sendMessage(node, &reply);
+		return 1;
+	}
+
         struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
+	if(otherUserNode == NULL) {
+		pthread_mutex_lock(&user->userMutex);
+		strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
+		pthread_mutex_unlock(&user->userMutex);
 
-		if(otherUserNode == NULL) {
-			pthread_mutex_lock(&user->userMutex);
-			strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
-			pthread_mutex_unlock(&user->userMutex);
-        
-			char *params[] = {cmd->params[0], ":Welcome to the server!"};
-			chat_createMessage(&reply, ":roundtable.example.com", RPL_WELCOME, params, ARRAY_SIZE(params));
-			// snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com %s %s :Welcome to server", RPL_WELCOME, cmd->params[0]);
-			chat_sendMessage(node, &reply);
-		} else {
-			snprintf(buff, ARRAY_SIZE(buff), "nickname in use: %s", cmd->params[0]);
-        		com_sendStr(node, buff);
-		}
+		char *params[] = {cmd->params[0], ":Welcome to the server!"};
+		chat_createMessage(&reply, ":roundtable.example.com", RPL_WELCOME, params, ARRAY_SIZE(params));
+	} else {
+		char *params[] = {cmd->params[0], ":Nickname already in use"};
+		chat_createMessage(&reply, ":roundtable.example.com", ERR_NICKNAMEINUSE, params, ARRAY_SIZE(params));	
+	}
 
+	chat_sendMessage(node, &reply);
 
         return 1;
     } else if(memcmp(cmd->command, "PRIVMSG", 7) == 0) {
