@@ -92,6 +92,15 @@ int chat_parseInput(struct link_Node *node);
 // Goes thru a message struct and determines what to di
 int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd);
 
+// Will send a Message struct to specified node
+int chat_sendMessage(struct link_Node *node, struct chat_Message *msg);
+
+// Fills in a Message struct
+int chat_createMessage(struct chat_Message *msg, char *prefix, char *cmd, char **params, int paramCount);
+
+// Converts a message struct into a string form suitable for sending
+int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr);
+
 // Locate the next space character
 int chat_findNextSpace(int starting, int size, char *str);
 

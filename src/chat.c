@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include "numerics.h"
 #include "communication.h"
 #include "logging.h"
 #include "chat.h"
@@ -159,6 +160,7 @@ int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
     struct chat_UserData *user;
     user = (struct chat_UserData *) node->data;
     char buff[BUFSIZ], nickname[NICKNAME_LENGTH];
+    struct chat_Message reply;
 
     pthread_mutex_lock(&user->userMutex);
     memcpy(nickname, user->nickname, NICKNAME_LENGTH); 
@@ -172,12 +174,15 @@ int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
 			strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
 			pthread_mutex_unlock(&user->userMutex);
         
-			snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com 001 %s :Welcome to server", cmd->params[0]);
+			char *params[] = {cmd->params[0], ":Welcome to the server!"};
+			chat_createMessage(&reply, ":roundtable.example.com", RPL_WELCOME, params, ARRAY_SIZE(params));
+			// snprintf(buff, ARRAY_SIZE(buff), ":roundtable.example.com %s %s :Welcome to server", RPL_WELCOME, cmd->params[0]);
+			chat_sendMessage(node, &reply);
 		} else {
 			snprintf(buff, ARRAY_SIZE(buff), "nickname in use: %s", cmd->params[0]);
+        		com_sendStr(node, buff);
 		}
 
-        com_sendStr(node, buff);
 
         return 1;
     } else if(memcmp(cmd->command, "PRIVMSG", 7) == 0) {
@@ -197,6 +202,40 @@ int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
     com_sendStr(node, "Invalid command");
 
     return 1;
+}
+
+int chat_sendMessage(struct link_Node *node, struct chat_Message *msg) {
+	char str[BUFSIZ];
+	chat_messageToString(msg, str, ARRAY_SIZE(str));
+	com_sendStr(node, str);
+
+	return 1;
+}
+
+int chat_createMessage(struct chat_Message *msg, char *prefix, char *cmd, char **params, int paramCount) {
+	strncpy(msg->prefix, prefix, ARRAY_SIZE(msg->prefix));
+	strncpy(msg->command, cmd, ARRAY_SIZE(msg->command));
+
+	for (int i = 0; i < paramCount; i++){
+		strncpy(msg->params[i], params[i], ARRAY_SIZE(msg->params[i]));
+	}
+
+	msg->paramCount = paramCount;
+
+	return 1;
+}
+
+int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr) {
+	snprintf(str, sizeStr, "%s %s", msg->prefix, msg->command);
+	
+	int newLen = sizeStr - strlen(str);
+	for (int i = 0; i < msg->paramCount && newLen > 0; i++){
+		strncat(str, " ", newLen);
+		strncat(str, msg->params[i], newLen - 1);
+		newLen -= strlen(str);
+	}
+
+	return 1;
 }
 
 // Locate the next space character 
