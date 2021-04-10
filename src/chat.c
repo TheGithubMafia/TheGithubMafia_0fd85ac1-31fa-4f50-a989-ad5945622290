@@ -110,7 +110,7 @@ int chat_parseInput(struct link_Node *node){
     log_logMessage(user->input, MESSAGE);
 
     // Find where the message ends (\r or \n); if not supplied just take the very end of the buffer
-    int length = ARRAY_SIZE(user->input) - 1;
+    int length = 0;
     int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
     for (int i = 0; i < ARRAY_SIZE(user->input); i++){
         if(user->input[i] == '\n' || user->input[i] == '\r'){
