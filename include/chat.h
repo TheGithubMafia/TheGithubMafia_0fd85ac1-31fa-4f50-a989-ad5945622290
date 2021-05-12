@@ -90,9 +90,6 @@ void *chat_processQueue(void *param);
 // Parse the input from a user and act on it
 int chat_parseInput(struct link_Node *node);
 
-// Goes thru a message struct and determines what to di
-int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd);
-
 // Will send a Message struct to specified node
 int chat_sendMessage(struct link_Node *node, struct chat_Message *msg);
 

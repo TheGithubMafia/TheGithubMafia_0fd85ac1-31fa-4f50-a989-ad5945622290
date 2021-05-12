@@ -157,39 +157,8 @@ int chat_parseInput(struct link_Node *node){
 
     pthread_mutex_unlock(&user->userMutex);
 
-    return chat_executeMessage(node, &cmd);
+    return cmd_runCommand(node, &cmd);
 
-}
-
-// Goes thru a message struct and determines what to do
-// TODO - Plan to replace the if-else with hashmap that gives function pointers
-int chat_executeMessage(struct link_Node *node, struct chat_Message *cmd){
-    struct chat_UserData *user;
-    user = (struct chat_UserData *) node->data;
-    char buff[BUFSIZ], nickname[NICKNAME_LENGTH];
-    //struct chat_Message reply;
-
-    pthread_mutex_lock(&user->userMutex);
-    memcpy(nickname, user->nickname, NICKNAME_LENGTH); 
-    pthread_mutex_unlock(&user->userMutex);
-
-    cmd_runCommand(node, cmd);
-
-    if(memcmp(cmd->command, "PRIVMSG", 7) == 0) {
-        struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
-
-        if(otherUserNode == NULL){
-            snprintf(buff, ARRAY_SIZE(buff), "invalid user %s", cmd->params[0]);
-            com_sendStr(node, buff);
-            return -1;
-        }
-
-        snprintf(buff, ARRAY_SIZE(buff), ":%s PRIVMSG %s %s", nickname, cmd->params[0], cmd->params[1]);
-        com_sendStr(otherUserNode, buff); 
-        return 1;
-    } 
-
-    return 1;
 }
 
 int chat_sendMessage(struct link_Node *node, struct chat_Message *msg) {
