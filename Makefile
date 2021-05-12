@@ -8,10 +8,11 @@ _OBJS=roundtable.o chat.o communication.o config.o linkedlist.o logging.o comman
 OBJS=$(patsubst %,$(ODIR)/%,$(_OBJS))
 
 $(ODIR)/%.o: $(SDIR)/%.c $(IDIR)/%.h
-	$(CC) -c -o $@ $< $(CFLAGS)
+    mkdir -p $(ODIR)
+    $(CC) -c -o $@ $< $(CFLAGS)
 
 server: $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS)
+    $(CC) -o $@ $^ $(CFLAGS)
 
 clean: 
 	rm -f obj/*.o server
