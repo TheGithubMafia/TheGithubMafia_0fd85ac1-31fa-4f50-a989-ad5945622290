@@ -7,18 +7,20 @@
 #include "communication.h"
 #include "linkedlist.h"
 #include "chat.h"
+#include "commands.h"
 
 int main(){
-	atexit(log_close);
+    atexit(log_close);
     atexit(com_close);
     atexit(chat_close);
 
     init_config("example_config.conf"); /* config.h */
     init_logging(); /* logging.h */
     init_server(); /* communication.h */
+    init_commands(); /* commands.h */
     init_chat(); /* chat.h */
 
-	com_acceptClients();
+    com_acceptClients();
 
-	return 0;
+    return 0;
 }

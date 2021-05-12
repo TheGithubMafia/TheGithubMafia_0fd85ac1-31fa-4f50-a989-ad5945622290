@@ -4,7 +4,7 @@ ODIR = obj
 CC=gcc
 CFLAGS=-I$(IDIR) -lpthread -Wall -Werror -Wextra -g
 
-_OBJS=main.o chat.o communication.o config.o linkedlist.o logging.o commands.o
+_OBJS=roundtable.o chat.o communication.o config.o linkedlist.o logging.o commands.o
 OBJS=$(patsubst %,$(ODIR)/%,$(_OBJS))
 
 $(ODIR)/%.o: $(SDIR)/%.c $(IDIR)/%.h
