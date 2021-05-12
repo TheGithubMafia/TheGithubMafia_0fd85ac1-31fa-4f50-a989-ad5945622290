@@ -7,6 +7,7 @@
 #include "communication.h"
 #include "logging.h"
 #include "linkedlist.h"
+#include "commands.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define NICKNAME_LENGTH 9
@@ -36,8 +37,8 @@ struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
 	char nickname[NICKNAME_LENGTH + 1];
-    char input[1024];
-    char output[1024];
+	char input[1024];
+	char output[1024];
 	pthread_mutex_t userMutex;
 };
 
