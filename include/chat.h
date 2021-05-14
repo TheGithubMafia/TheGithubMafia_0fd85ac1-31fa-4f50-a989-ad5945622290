@@ -50,6 +50,14 @@ struct chat_Server {
 	pthread_mutex_t serverMutex;
 };
 
+// New feature: A group a channels that a user can join
+// All at once, and an operator has full control over all
+struct chat_Group {
+    char name[CHANNEL_NAME_LENGTH];
+    struct link_List channels;
+    pthread_mutex_t groupMutex;
+}
+
 struct chat_Channel {
 	size_t id;
 	char name[CHANNEL_NAME_LENGTH];
