@@ -7,6 +7,7 @@
 */
 
 struct cmd_CommandList cmd_commandList;
+char *thisServer = "roundtable.example.com";
 
 int init_commands() {
     // Initalize mutex to prevent locking issues
@@ -17,12 +18,19 @@ int init_commands() {
     }
 
     cmd_addCommand(0, "NICK", &cmd_nick);
+    cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
 
+    log_logMessage("Successfully initalized commands", INFO);
     return 1;
 }
 
-int cmd_addCommand(int numeric, char *word, int (*func)(struct link_Node *, struct chat_Message *)) {
+int cmd_addCommand(int numeric, char *word, int (*func)(struct chat_Message *, struct chat_Message *)) {
     struct cmd_Command *command = malloc(sizeof(struct cmd_Command));
+    if(command == NULL){
+        log_logError("Failed to allocate cmd_Command!", DEBUG);
+        return -1;
+    }
+
     command->numeric = numeric;
     strncpy(command->word, word, ARRAY_SIZE(command->word));	
     command->func = func;
@@ -34,39 +42,40 @@ int cmd_addCommand(int numeric, char *word, int (*func)(struct link_Node *, stru
     return 1;
 }
 
-int cmd_runCommand(struct link_Node *userNode, struct chat_Message *cmd){
-    struct link_Node *node;
+int cmd_runCommand(struct chat_Message *cmd){
+    struct link_Node *cmdNode;
+    struct chat_Message reply;
     struct cmd_Command *command;
+    int ret = -1;
 
     // Loop thru the commands looking for the same command
     pthread_mutex_lock(&cmd_commandList.commandMutex);
-    for(node = cmd_commandList.commands.head; node != NULL; node = node->next){
-        if(node->data == NULL){
+    for(cmdNode = cmd_commandList.commands.head; cmdNode != NULL; cmdNode = cmdNode->next){
+        if(cmdNode->data == NULL){
             continue;
         }
 
-        command = node->data;
+        command = cmdNode->data;
         if(!strncmp(command->word, cmd->command, ARRAY_SIZE(command->word))){
-            pthread_mutex_unlock(&cmd_commandList.commandMutex);
-            return command->func(userNode, cmd);
+            ret = command->func(cmd, &reply);
+            break;
         }
     }
     pthread_mutex_unlock(&cmd_commandList.commandMutex);
 
-    // Nothing matched: unsuccessful
-    printf("%p:(\n", node);
-    return -1;
+    chat_sendMessage(&reply);
+    return ret;
 }
 
 // Changes a user's nickname
 const char *nick_usage = ":Usage: NICK <nickname>";
 const char *nick_success = ":Welcome to the server!";
 const char *nick_inUse = ":Nickname already in use!";
-int cmd_nick(struct link_Node *node, struct chat_Message *cmd){
+int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
+    struct link_Node *node = cmd->userNode;
     struct chat_UserData *user;
-    struct chat_Message reply;
     char *params[ARRAY_SIZE(cmd->params)];
-    char numeric[5];
+    char numeric[NUMERIC_SIZE];
     int size = 0;
 
     user = (struct chat_UserData *) node->data;
@@ -75,8 +84,7 @@ int cmd_nick(struct link_Node *node, struct chat_Message *cmd){
         params[0] = (char *) nick_usage;
         strncpy(numeric, ERR_NONICKNAMEGIVEN, ARRAY_SIZE(numeric)-1);
         size = 1;
-        chat_createMessage(&reply, ":roundtable.example.com", numeric, params, size);
-        chat_sendMessage(node, &reply);
+        chat_createMessage(reply, node, thisServer, numeric, params, size);
         return 1;
     }
 
@@ -97,8 +105,52 @@ int cmd_nick(struct link_Node *node, struct chat_Message *cmd){
         size = 2;
     }
 
-    chat_createMessage(&reply, ":roundtable.example.com", numeric, params, size);
-    chat_sendMessage(node, &reply);
+    chat_createMessage(reply, node, thisServer, numeric, params, size);
+    return 1;
+}
 
+// Send a message to user or channel
+// TODO - add multiple receivers -> <receiver>{,<receiver>}
+const char *privmsg_usage = ":Usage: <receiver> <message>";
+const char *privmsg_userNotFound = ":Nick not found!";
+int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
+    struct link_Node *node = cmd->userNode;
+    struct chat_UserData *user;
+    char *params[ARRAY_SIZE(cmd->params)];
+    char numeric[NUMERIC_SIZE];
+    int size = 0;
+    user = (struct chat_UserData *) node->data;
+    
+    if(cmd->paramCount != 2){
+        params[0] = (char *) privmsg_usage;
+        strncpy(numeric, ERR_NEEDMOREPARAMS, ARRAY_SIZE(numeric)-1);
+        size = 1;
+        chat_createMessage(reply, node, thisServer, numeric, params, size);
+        return -1;
+    }
+
+    struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
+    if(otherUserNode == NULL){
+        params[0] = cmd->params[0];
+        params[1] = (char *) privmsg_userNotFound;
+        strncpy(numeric, ERR_NOSUCHNICK, ARRAY_SIZE(numeric)-1);
+        size = 2;
+        chat_createMessage(reply, node, thisServer, numeric, params, size);
+        printf("%s\n", cmd->params[0]);
+        return -1;
+    }
+
+    // Success
+    char nickname[NICKNAME_LENGTH];
+    pthread_mutex_lock(&user->userMutex);
+    strncpy(nickname, user->nickname, NICKNAME_LENGTH);
+    pthread_mutex_unlock(&user->userMutex);
+
+    params[0] = cmd->params[0];
+    params[1] = cmd->params[1];
+    strncpy(numeric, "PRIVMSG", ARRAY_SIZE(numeric)-1);
+    size = 2;
+
+    chat_createMessage(reply, otherUserNode, nickname, numeric, params, size);
     return 1;
 }

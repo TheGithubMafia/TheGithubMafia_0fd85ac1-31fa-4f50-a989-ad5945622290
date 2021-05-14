@@ -63,7 +63,11 @@ struct chat_DataQueue {
     pthread_mutex_t queueMutex;
 };
 
+// Contains all parts of a typical message
+// The userNode is used to identify the user when receiving
+// and used to identify the recipient when sending
 struct chat_Message {
+    struct link_Node *userNode;
     char prefix[50];
     char command[50];
     int paramCount;
@@ -91,10 +95,10 @@ void *chat_processQueue(void *param);
 int chat_parseInput(struct link_Node *node);
 
 // Will send a Message struct to specified node
-int chat_sendMessage(struct link_Node *node, struct chat_Message *msg);
+int chat_sendMessage(struct chat_Message *msg);
 
 // Fills in a Message struct
-int chat_createMessage(struct chat_Message *msg, char *prefix, char *cmd, char **params, int paramCount);
+int chat_createMessage(struct chat_Message *msg, struct link_Node *user, char *prefix, char *cmd, char **params, int paramCount);
 
 // Converts a message struct into a string form suitable for sending
 int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr);

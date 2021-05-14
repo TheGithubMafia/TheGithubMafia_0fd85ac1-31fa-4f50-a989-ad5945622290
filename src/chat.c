@@ -146,6 +146,7 @@ int chat_parseInput(struct link_Node *node){
        if (loc >= 0){
             if(user->input[currentPos] == ':'){ // Colon means rest of string is together
                 memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], length - currentPos);
+                cmd.paramCount++;
                 break;
             }
 
@@ -155,22 +156,28 @@ int chat_parseInput(struct link_Node *node){
        }
     }
 
+    cmd.userNode = node;
     pthread_mutex_unlock(&user->userMutex);
 
-    return cmd_runCommand(node, &cmd);
+    return cmd_runCommand(&cmd);
 
 }
 
-int chat_sendMessage(struct link_Node *node, struct chat_Message *msg) {
+int chat_sendMessage(struct chat_Message *msg) {
     char str[BUFSIZ];
     chat_messageToString(msg, str, ARRAY_SIZE(str));
-    com_sendStr(node, str);
+    com_sendStr(msg->userNode, str);
 
     return 1;
 }
 
-int chat_createMessage(struct chat_Message *msg, char *prefix, char *cmd, char **params, int paramCount) {
-    strncpy(msg->prefix, prefix, ARRAY_SIZE(msg->prefix));
+int chat_createMessage(struct chat_Message *msg, struct link_Node *user, char *prefix, char *cmd, char **params, int paramCount) {
+    msg->userNode = user;
+
+    if(prefix != NULL){ // Automatically insert a ':' infront
+        msg->prefix[0] = ':';
+        strncpy(&msg->prefix[1], prefix, ARRAY_SIZE(msg->prefix)-1);
+    }
     strncpy(msg->command, cmd, ARRAY_SIZE(msg->command));
 
     for (int i = 0; i < paramCount; i++){
