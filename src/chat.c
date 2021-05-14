@@ -360,9 +360,9 @@ struct link_Node *chat_createChannel(char *name, struct chat_Server *server){
 }
 
 // Add a user to a channel from their node on the main user list
-struct link_Node *chat_addToChannel(struct chat_Channel *channel, struct link_Node *user){
+struct link_Node *chat_addToChannel(struct chat_Channel *channel, struct link_Node *userNode){
     pthread_mutex_lock(&channel->channelMutex);
-    struct link_Node *ret = link_add(&channel->users, user);
+    struct link_Node *ret = link_add(&channel->users, userNode);
     pthread_mutex_unlock(&channel->channelMutex);
 
     return ret;
