@@ -7,6 +7,7 @@
 */
 
 struct cmd_CommandList cmd_commandList;
+struct chat_Message cmd_defaultError;
 char *thisServer = "roundtable.example.com";
 
 int init_commands() {
@@ -16,6 +17,12 @@ int init_commands() {
         log_logError("Error initalizing pthread_mutex", ERROR);
         return -1;
     }
+
+    // Init cmd_defaultError
+    char *params[] = {":Unknown command: "};
+    chat_createMessage(&cmd_defaultError, NULL, thisServer, ERR_UNKNOWNERROR, params, 1);
+    cmd_defaultError.userNode = NULL;
+
 
     cmd_addCommand(0, "NICK", &cmd_nick);
     cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
@@ -62,6 +69,13 @@ int cmd_runCommand(struct chat_Message *cmd){
         }
     }
     pthread_mutex_unlock(&cmd_commandList.commandMutex);
+
+    // Unknown command
+    if(ret == -1){
+        memcpy(&reply, &cmd_defaultError, sizeof(reply));
+        reply.userNode = cmd->userNode;
+        strncat(reply.params[0], cmd->command, 15);
+    }
 
     chat_sendMessage(&reply);
     return ret;
@@ -136,7 +150,6 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
         strncpy(numeric, ERR_NOSUCHNICK, ARRAY_SIZE(numeric)-1);
         size = 2;
         chat_createMessage(reply, node, thisServer, numeric, params, size);
-        printf("%s\n", cmd->params[0]);
         return -1;
     }
 
