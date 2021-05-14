@@ -224,17 +224,12 @@ struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
             user = node->data;
             pthread_mutex_lock(&user->userMutex);
 
-            //compare the names letter by letter
-            for(int i = 0; i < ARRAY_SIZE(user->nickname); i++){
-                    if(user->nickname[i] != name[i]){
-                            break;
-                    }
-
+            if(!strncmp(user->nickname, name, NICKNAME_LENGTH)){
                     pthread_mutex_unlock(&user->userMutex);
                     pthread_mutex_unlock(&serverLists.usersMutex);
                     return node;
             }
-            
+
             pthread_mutex_unlock(&user->userMutex);
     }
 
