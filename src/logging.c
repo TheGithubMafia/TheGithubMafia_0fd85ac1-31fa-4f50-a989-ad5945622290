@@ -102,9 +102,9 @@ int log_getTimeShort(char str[11]){
 int log_logToFile(char* msg, int type){
 	//check to see if log file is already open
 	if(!log_LogFile){
-        if(log_openFile() < 0){
-            return -1;
-        }
+            if(log_openFile() < 0){
+                return -1;
+            }
 	}
 
 	char formattedMsg[BUFSIZ];
@@ -131,6 +131,7 @@ void log_printLogFormat(char *msg, int type){
 	char formattedMsg[BUFSIZ];
 
 	log_createLogFormat(formattedMsg, ARRAY_SIZE(formattedMsg), msg, type);
+
 	printf("%s\n", formattedMsg);
 }	
 
@@ -177,6 +178,11 @@ void log_createLogFormat(char* buffer, int size, char* msg, int type){
 	buffer[size-1] = '\0';
 	strncat(buffer, formattedType, size-strlen(buffer));
 	strncat(buffer, msg, size-strlen(buffer));
+
+        // Remove newline because printing will put one
+        if(buffer[strlen(buffer)-1] == '\n'){
+            buffer[strlen(buffer)-1] = '\0';
+        }
 }
 
 int log_logError(char* msg, int type){
