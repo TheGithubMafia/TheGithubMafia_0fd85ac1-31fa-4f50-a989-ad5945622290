@@ -24,8 +24,10 @@ struct chat_ServerLists {
 	int max;
 	struct link_List users;	
 	pthread_mutex_t usersMutex;
-	struct link_List servers;	
-	pthread_mutex_t serversMutex;
+	struct link_List groups;	
+	pthread_mutex_t groupsMutex;
+        struct link_List channels;
+        pthread_mutex_t channelsMutex;
 };
 
 // Data about an user
@@ -42,21 +44,13 @@ struct chat_UserData {
 	pthread_mutex_t userMutex;
 };
 
-// Server is a list of Channels
-struct chat_Server {
-	size_t id;
-	char name[50];
-	struct link_List users, channels;
-	pthread_mutex_t serverMutex;
-};
-
 // New feature: A group a channels that a user can join
 // All at once, and an operator has full control over all
 struct chat_Group {
     char name[CHANNEL_NAME_LENGTH];
     struct link_List channels;
     pthread_mutex_t groupMutex;
-}
+};
 
 struct chat_Channel {
 	size_t id;
@@ -123,14 +117,11 @@ struct link_Node *chat_getUserById(size_t id);
 //Get a user's node in the main list by Socket FD
 struct link_Node *chat_getUserBySocket(int sock);
 
-//Create a new user, but only if it doesn't already exist
+// Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
 
-// Returns the node to a new user, also automatically adds the user to the main list
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
-
-// Create a channel with the specified name
-struct link_Node *chat_createChannel(char *name, struct chat_Server *server);
+// Create a channel with the specified name, and add it to the specified group
+struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
 
 // Places a pointer to the user into the Channel's list, and create it if needed
 struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user);

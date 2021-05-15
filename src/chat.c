@@ -288,23 +288,6 @@ struct link_Node *chat_getUserById(size_t id){
     return NULL;
 }
 
-struct link_Node *chat_loginUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
-    struct link_Node *node = chat_getUserByName(name);
-
-    if(node == NULL){
-            return NULL;
-    }
-
-    struct chat_UserData *user = node->data;
-    pthread_mutex_lock(&(user->userMutex));
-
-    memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
-    
-    pthread_mutex_lock(&(user->userMutex));
-
-    return node;
-}
-
 //Create a new user and return the node that it is in
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
     struct chat_UserData *user;
@@ -338,9 +321,33 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
     return userNode;
 }
 
+struct link_Node *chat_getChannelByName(char *name){
+    struct link_Node *node;
+    struct chat_Channel *channel;
+
+    pthread_mutex_lock(&serverLists.channelsMutex);
+
+    for(node = serverLists.channels.head; node != NULL; node = node->next){
+            channel = node->data;
+            pthread_mutex_lock(&channel->channelMutex);
+
+            if(!strncmp(channel->name, name, CHANNEL_NAME_LENGTH)){
+                    pthread_mutex_unlock(&channel->channelMutex);
+                    pthread_mutex_unlock(&serverLists.channelsMutex);
+                    return node;
+            }
+
+            pthread_mutex_unlock(&channel->channelMutex);
+    }
+
+    pthread_mutex_unlock(&serverLists.channelsMutex);
+
+    return NULL;
+}
+
 // Create a channel with the specified name
 // TODO - add further channel properties
-struct link_Node *chat_createChannel(char *name, struct chat_Server *server){
+struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     struct chat_Channel *channel;
 
     channel = malloc(sizeof(struct chat_Channel));
@@ -352,9 +359,14 @@ struct link_Node *chat_createChannel(char *name, struct chat_Server *server){
     // TODO - make sure name is legal
     strncpy(channel->name, name, CHANNEL_NAME_LENGTH);
 
-    pthread_mutex_lock(&server->serverMutex);
-    struct link_Node *node = link_add(&server->channels, channel);
-    pthread_mutex_lock(&server->serverMutex);
+    // Add to the group
+    pthread_mutex_lock(&group->groupMutex);
+    link_add(&group->channels, channel);
+    pthread_mutex_unlock(&group->groupMutex);
+
+    pthread_mutex_lock(&serverLists.channelsMutex);
+    struct link_Node *node = link_add(&serverLists.channels, channel);
+    pthread_mutex_unlock(&serverLists.channelsMutex);
 
     return node;
 }
