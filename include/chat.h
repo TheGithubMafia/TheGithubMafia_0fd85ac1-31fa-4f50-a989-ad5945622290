@@ -129,6 +129,9 @@ struct link_Node *chat_getChannelByName(char *name);
 // Create a channel with the specified name, and add it to the specified group
 struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
 
+// check if a user is in a channel
+int chat_isInChannel(struct link_Node *channelNode, struct link_Node *userNode);
+
 // Places a pointer to the user into the Channel's list, and create it if needed
 struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode);
 

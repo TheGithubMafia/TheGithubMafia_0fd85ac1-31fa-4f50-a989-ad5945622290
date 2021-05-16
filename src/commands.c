@@ -130,28 +130,42 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 // TODO - add multiple receivers -> <receiver>{,<receiver>}
 const char *privmsg_usage = ":Usage: <receiver> <message>";
 const char *privmsg_userNotFound = ":Nick not found!";
+const char *privmsg_channelNotFound = ":Channel not found!";
+const char *privmsg_chanWritePerms = ":You do not have permission to send messages to this channel!";
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
+    struct link_Node *otherUserNode;
+    struct link_Node *channel;
     char *params[ARRAY_SIZE(cmd->params)];
-    char numeric[NUMERIC_SIZE];
-    int size = 0;
+    int size = 1;
     
     if(cmd->paramCount != 2){
         params[0] = (char *) privmsg_usage;
-        strncpy(numeric, ERR_NEEDMOREPARAMS, ARRAY_SIZE(numeric)-1);
-        size = 1;
-        chat_createMessage(reply, node, thisServer, numeric, params, size);
+        chat_createMessage(reply, node, thisServer, ERR_NEEDMOREPARAMS, params, size);
         return -1;
     }
 
-    struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
-    if(otherUserNode == NULL){
-        params[0] = cmd->params[0];
-        params[1] = (char *) privmsg_userNotFound;
-        strncpy(numeric, ERR_NOSUCHNICK, ARRAY_SIZE(numeric)-1);
-        size = 2;
-        chat_createMessage(reply, node, thisServer, numeric, params, size);
-        return -1;
+    // Sending to another user
+    params[0] = cmd->params[0];
+    size = 2;
+    if(cmd->params[0][0] != '#'){
+        otherUserNode = chat_getUserByName(cmd->params[0]);
+        if(otherUserNode == NULL){
+            params[1] = (char *) privmsg_userNotFound;
+            chat_createMessage(reply, node, thisServer, ERR_NOSUCHNICK, params, size);
+            return -1;
+        }
+    } else { // To a channel
+        channel = chat_getChannelByName(cmd->params[0]);
+        if(channel == NULL){
+            params[1] = (char *) privmsg_channelNotFound;
+            chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
+            return -1;
+        } else if (chat_isInChannel(channel, node) < 0){
+            params[1] = (char *) privmsg_chanWritePerms;
+            chat_createMessage(reply, node, thisServer, ERR_CANNOTSENDTOCHAN, params, size);
+           return -1; 
+        }
     }
 
     // Success
@@ -160,11 +174,14 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
 
     params[0] = cmd->params[0];
     params[1] = cmd->params[1];
-    strncpy(numeric, "PRIVMSG", ARRAY_SIZE(numeric)-1);
-    size = 2;
 
-    chat_createMessage(reply, otherUserNode, nickname, numeric, params, size);
-    return 1;
+    chat_createMessage(reply, otherUserNode, nickname, "PRIVMSG", params, size);
+    if(channel == NULL){
+        return 1;
+    }
+
+    chat_sendChannelMessage(reply, channel);
+    return 2;
 }
 
 // Join a channel
@@ -202,7 +219,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
         log_logMessage(msg, INFO);
     }
 
-    chat_addToChannel(channel, node); 
+    chat_addToChannel(channel, node); // Check for error
 
     // Success
     char nickname[NICKNAME_LENGTH];

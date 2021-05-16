@@ -396,24 +396,35 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     return node;
 }
 
+// Check if a user is in a channel
+int chat_isInChannel(struct link_Node *channelNode, struct link_Node *userNode){
+    struct chat_Channel *channel = channelNode->data;
+
+    pthread_mutex_lock(&channel->channelMutex);
+    for(struct link_Node *n = channel->users.head; n != NULL; n = n->next){
+        if(n->data == userNode){
+            pthread_mutex_unlock(&channel->channelMutex);
+            return 1;
+        }
+    }
+    pthread_mutex_unlock(&channel->channelMutex);
+
+    return -1;
+}
+
 // Add a user to a channel from their node on the main user list
 struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode){
     struct chat_Channel *channel = channelNode->data;
 
-    pthread_mutex_lock(&channel->channelMutex);
-
-    // Make sure user isn't already inside channel
-    for(struct link_Node *n = channel->users.head; n != NULL; n = n->next){
-        if(n->data == userNode){
-            pthread_mutex_unlock(&channel->channelMutex);
-            return NULL;
-        }
+    if(chat_isInChannel(channelNode, userNode) < 0){
+        pthread_mutex_lock(&channel->channelMutex);
+        struct link_Node *ret = link_add(&channel->users, userNode);
+        pthread_mutex_unlock(&channel->channelMutex);
+        
+        return ret;
     }
 
-    struct link_Node *ret = link_add(&channel->users, userNode);
-    pthread_mutex_unlock(&channel->channelMutex);
-
-    return ret;
+    return NULL;
 }
 
 // Send a message to every user in a channel
@@ -422,10 +433,12 @@ int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelN
     struct link_Node *node;
     struct chat_Channel *channel = channelNode->data;
 
+    pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL; node = node->next){
         cmd->userNode = node->data;
         chat_sendMessage(cmd);
     }
+    pthread_mutex_unlock(&channel->channelMutex);
 
     return 1;
 }
