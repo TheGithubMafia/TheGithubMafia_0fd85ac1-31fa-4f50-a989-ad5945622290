@@ -401,6 +401,15 @@ struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_N
     struct chat_Channel *channel = channelNode->data;
 
     pthread_mutex_lock(&channel->channelMutex);
+
+    // Make sure user isn't already inside channel
+    for(struct link_Node *n = channel->users.head; n != NULL; n = n->next){
+        if(n->data == userNode){
+            pthread_mutex_unlock(&channel->channelMutex);
+            return NULL;
+        }
+    }
+
     struct link_Node *ret = link_add(&channel->users, userNode);
     pthread_mutex_unlock(&channel->channelMutex);
 
