@@ -344,6 +344,10 @@ struct link_Node *chat_getChannelByName(char *name){
     struct link_Node *node;
     struct chat_Channel *channel;
 
+    if(name[0] != '#'){
+        return NULL;
+    }
+
     pthread_mutex_lock(&serverLists.channelsMutex);
 
     for(node = serverLists.channels.head; node != NULL; node = node->next){
@@ -425,6 +429,30 @@ struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_N
     }
 
     return NULL;
+}
+
+// Will fill a string with a list of users
+int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
+    struct link_Node *node;
+    struct chat_Channel *channel = channelNode->data;
+    char nickname[NICKNAME_LENGTH];
+    int pos = 1;
+
+    buff[0] = ':';
+    pthread_mutex_lock(&channel->channelMutex);
+    for(node = channel->users.head; node != NULL && pos < size; node = node->next){
+        chat_getNameByNode(nickname, node->data);
+        strncat(buff, nickname, size - pos - 1);
+        pos = strlen(buff);
+
+        // Space inbetween users
+        buff[pos] = ' ';
+        buff[pos + 1] = '\0';
+        pos++;
+    }
+    pthread_mutex_unlock(&channel->channelMutex);
+
+    return 1;
 }
 
 // Send a message to every user in a channel

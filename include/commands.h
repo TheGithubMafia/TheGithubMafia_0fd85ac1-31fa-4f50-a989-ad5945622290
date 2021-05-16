@@ -28,10 +28,16 @@ int cmd_addCommand(int numeric, char *word, int (*func)(struct chat_Message *, s
 
 int cmd_runCommand(struct chat_Message *cmd);
 
+// Change a user's nickname
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Send to a message to user or channel
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Join a channel
 int cmd_join(struct chat_Message *cmd, struct chat_Message *reply);
+
+// Return a list of names inside a channel
+int cmd_names(struct chat_Message *cmd, struct chat_Message *reply);
 
 #endif

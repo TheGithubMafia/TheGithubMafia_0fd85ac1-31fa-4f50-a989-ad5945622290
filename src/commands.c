@@ -7,8 +7,11 @@
 */
 
 struct cmd_CommandList cmd_commandList;
-struct chat_Message cmd_defaultError;
+struct chat_Message cmd_unknownCommand;
 char *thisServer = "roundtable.example.com";
+
+// Common reply messages
+const char *invalidChanName = ":Invalid channel name: start with #";
 
 int init_commands() {
     // Initalize mutex to prevent locking issues
@@ -18,15 +21,16 @@ int init_commands() {
         return -1;
     }
 
-    // Init cmd_defaultError
+    // Init cmd_unknownCommand
     char *params[] = {":Unknown command: "};
-    chat_createMessage(&cmd_defaultError, NULL, thisServer, ERR_UNKNOWNERROR, params, 1);
-    cmd_defaultError.userNode = NULL;
+    chat_createMessage(&cmd_unknownCommand, NULL, thisServer, ERR_UNKNOWNCOMMAND, params, 1);
+    cmd_unknownCommand.userNode = NULL;
 
 
     cmd_addCommand(0, "NICK", &cmd_nick);
     cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
     cmd_addCommand(2, "JOIN", &cmd_join);
+    cmd_addCommand(3, "NAMES", &cmd_names);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
@@ -65,6 +69,7 @@ int cmd_runCommand(struct chat_Message *cmd){
 
         command = cmdNode->data;
         if(!strncmp(command->word, cmd->command, ARRAY_SIZE(command->word))){
+            pthread_mutex_unlock(&cmd_commandList.commandMutex);
             ret = command->func(cmd, &reply);
             break;
         }
@@ -73,7 +78,7 @@ int cmd_runCommand(struct chat_Message *cmd){
 
     // Unknown command: -1 is reserved for known command error
     if(ret == -2){
-        memcpy(&reply, &cmd_defaultError, sizeof(reply));
+        memcpy(&reply, &cmd_unknownCommand, sizeof(reply));
         reply.userNode = cmd->userNode;
         strncat(reply.params[0], cmd->command, 15);
     }
@@ -99,9 +104,8 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     // No nickname given
     if(cmd->params[0][0] == '\0'){
         params[0] = (char *) nick_usage;
-        strncpy(numeric, ERR_NONICKNAMEGIVEN, ARRAY_SIZE(numeric)-1);
         size = 1;
-        chat_createMessage(reply, node, thisServer, numeric, params, size);
+        chat_createMessage(reply, node, thisServer, ERR_NONICKNAMEGIVEN, params, size);
         return 1;
     }
 
@@ -188,7 +192,6 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
 // TODO - key for access
 // TODO - add error checking
 const char *join_usage = ":Usage: <channel>";
-const char *join_invalidChanName = ":Invalid channel name: start with #";
 int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
     char *params[ARRAY_SIZE(cmd->params)];
@@ -201,7 +204,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
     if(cmd->params[0][0] != '#'){
-        params[0] = (char *) join_invalidChanName;
+        params[0] = (char *) invalidChanName;
         chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
         return -1;
     }
@@ -230,4 +233,39 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     chat_createMessage(reply, node, nickname, "JOIN", params, size);
     chat_sendChannelMessage(reply, channel);
     return 2;
+}
+
+// Returns list of names
+// TODO - Hidden/private channels and multiple channels
+int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
+    struct link_Node *node = cmd->userNode;
+    char *params[ARRAY_SIZE(cmd->params)];
+    int size = 1;
+    
+    if(cmd->paramCount != 1){
+        params[0] = ":Usage: NAMES <channel>";
+        chat_createMessage(reply, node, thisServer, ERR_NEEDMOREPARAMS, params, size);
+        return -1;
+    }
+
+    struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
+    if(channel == NULL){
+        params[0] = (char *) invalidChanName;
+        chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
+        return -1;
+    }
+
+    // Success
+    char nickname[NICKNAME_LENGTH];
+    chat_getNameByNode(nickname, node);
+    char names[ARRAY_SIZE(cmd->params[0])];
+    chat_getUsersInChannel(channel, names, ARRAY_SIZE(names));
+    params[0] = nickname;
+    params[1] = "=";
+    params[2] = cmd->params[0];
+    params[3] = names;
+    size = 4;
+
+    chat_createMessage(reply, node, thisServer, RPL_NAMREPLY, params, size);
+    return 1;
 }

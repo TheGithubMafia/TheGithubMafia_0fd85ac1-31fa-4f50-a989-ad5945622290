@@ -73,7 +73,7 @@ struct chat_Message {
     char prefix[50];
     char command[50];
     int paramCount;
-    char params[15][50];
+    char params[10][400];
 };
 
 void chat_setMaxUsers(int max);
@@ -134,6 +134,9 @@ int chat_isInChannel(struct link_Node *channelNode, struct link_Node *userNode);
 
 // Places a pointer to the user into the Channel's list, and create it if needed
 struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode);
+
+// Will fill a buffer with list of users
+int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size);
 
 // Sends a message to all online users in this room
 int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode);
