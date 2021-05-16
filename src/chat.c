@@ -64,9 +64,9 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int chat_insertQueue(struct link_Node *node){
+int chat_insertQueue(struct chat_QueueJob *job){
     pthread_mutex_lock(&dataQueue.queueMutex); 
-    link_add(&dataQueue.queue, node);
+    link_add(&dataQueue.queue, job);
     pthread_mutex_unlock(&dataQueue.queueMutex); 
 
     return 1;
@@ -77,23 +77,30 @@ void *chat_processQueue(void *param){
     struct timespec delay = {.tv_nsec = 1000000}; // 1ms
 
     while(1) { 
-        struct link_Node *node = NULL;
+        struct chat_QueueJob *job = NULL;
 
         // grab from first item in linked list: expecting a link_Node of the user
         // also make sure list isn't empty
         pthread_mutex_lock(&dataQ->queueMutex);
         if(link_isEmpty(&dataQ->queue) < 0){
-            node = link_remove(&dataQ->queue, 0);
+            job = link_remove(&dataQ->queue, 0);
         }
         pthread_mutex_unlock(&dataQ->queueMutex);
 
         // Nothing to process
-        if(node == NULL){
+        if(job == NULL){
             nanosleep(&delay, NULL); // Allow other threads time to access mutex
             continue;
         }
 
-        chat_parseInput(node); 
+        if(job->type == 0){ // Text to cmd
+            chat_parseInput(job); 
+        } else { // Run the cmd
+            cmd_runCommand(job->msg);
+            free(job->msg);
+        }
+
+        free(job);
     }
 
     return NULL;
@@ -101,66 +108,79 @@ void *chat_processQueue(void *param){
 
 // TODO - Support multiple cmds in one read
 // TODO - Handle null bytes? also handle MAJOR issues with memcpy (size of copied)
-int chat_parseInput(struct link_Node *node){
-    struct chat_UserData *user;
-    user = (struct chat_UserData *) node->data;
-    struct chat_Message cmd = {0};
+int chat_parseInput(struct chat_QueueJob *job){
+    struct link_Node *node = job->node;
+    struct chat_Message *cmd = malloc(sizeof(struct chat_Message));
+    struct chat_QueueJob *cmdJob;
 
-    pthread_mutex_lock(&user->userMutex); 
+    if(cmd == NULL){
+            log_logError("Error creating cmd struct", DEBUG);
+            return -1;
+    }
+    memset(cmd, 0, sizeof(struct chat_Message)); // Set all memory to 0
 
-    log_logMessage(user->input, MESSAGE);
+    log_logMessage(job->str, MESSAGE);
 
     // Find where the message ends (\r or \n); if not supplied just take the very end of the buffer
     int length = 0;
     int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
-    for (int i = 0; i < ARRAY_SIZE(user->input); i++){
-        if(user->input[i] == '\n' || user->input[i] == '\r'){
+    for (int i = 0; i < ARRAY_SIZE(job->str); i++){
+        if(job->str[i] == '\n' || job->str[i] == '\r'){
             length = i+1;
-            user->input[i] = ' ';
+            job->str[i] = ' ';
             break;
         }
 
 	// Remove any non-printable characters
-	if(iscntrl(user->input[i]) == 1){
-		user->input[i] = ' ';
+	if(iscntrl(job->str[i]) == 1){
+		job->str[i] = ' ';
 	}
     }
 
-    if(user->input[0] == ':'){
-       loc = chat_findNextSpace(0, length, user->input);
+    if(job->str[0] == ':'){
+       loc = chat_findNextSpace(0, length, job->str);
        if (loc > -1){
-           memcpy(cmd.prefix, &user->input[1], loc - 1); // Copy everything except for the ':'
+           memcpy(cmd->prefix, &job->str[1], loc - 1); // Copy everything except for the ':'
            currentPos = loc + 1;
        }
     }
 
-    loc = chat_findNextSpace(currentPos, length, user->input); 
+    loc = chat_findNextSpace(currentPos, length, job->str); 
     if (loc >= 0){
-        memcpy(cmd.command, &user->input[currentPos], loc - currentPos);
+        memcpy(cmd->command, &job->str[currentPos], loc - currentPos);
         currentPos = loc + 1;
     }
 
     // Fill in up to 15 params
-    while (loc > -1 && cmd.paramCount < 15){
-       loc = chat_findNextSpace(currentPos, length, user->input);
+    while (loc > -1 && cmd->paramCount < 15){
+       loc = chat_findNextSpace(currentPos, length, job->str);
        if (loc >= 0){
-            if(user->input[currentPos] == ':'){ // Colon means rest of string is together
-                memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], length - currentPos);
-                cmd.paramCount++;
+            if(job->str[currentPos] == ':'){ // Colon means rest of string is together
+                memcpy(cmd->params[cmd->paramCount], &job->str[currentPos], length - currentPos);
+                cmd->paramCount++;
                 break;
             }
 
-            memcpy(cmd.params[cmd.paramCount], &user->input[currentPos], loc - currentPos);
+            memcpy(cmd->params[cmd->paramCount], &job->str[currentPos], loc - currentPos);
             currentPos = loc +1;
-            cmd.paramCount++;
+            cmd->paramCount++;
        }
     }
 
-    cmd.userNode = node;
-    pthread_mutex_unlock(&user->userMutex);
+    cmd->userNode = node;
 
-    return cmd_runCommand(&cmd);
+    printf("%d\n", cmd->paramCount);
+    // Create job to execute command
+    cmdJob = malloc(sizeof(struct chat_QueueJob));
+    if(cmdJob == NULL){
+            log_logError("Error creating job", DEBUG);
+            free(cmd);
+            return -1;
+    }
+    cmdJob->msg = cmd;
+    cmdJob->type = 1; // Run as a command
 
+    return chat_insertQueue(cmdJob);
 }
 
 int chat_sendMessage(struct chat_Message *msg) {

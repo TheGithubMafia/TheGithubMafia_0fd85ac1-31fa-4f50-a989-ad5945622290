@@ -65,6 +65,13 @@ struct chat_DataQueue {
     pthread_mutex_t queueMutex;
 };
 
+struct chat_QueueJob {
+    int type;
+    struct link_Node *node;
+    char str[1024];
+    struct chat_Message *msg; 
+};
+
 // Contains all parts of a typical message
 // The userNode is used to identify the user when receiving
 // and used to identify the recipient when sending
@@ -87,14 +94,14 @@ int chat_setupDataThreads(struct fig_ConfigData *config);
 
 // Insert selected node into the queue for processing
 // Mutex is handled by this function internally
-int chat_insertQueue(struct link_Node *node);
+int chat_insertQueue(struct chat_QueueJob *job);
 
 // Process the queue's contents and then send data back
 // to the communication queue for sending back to clients
 void *chat_processQueue(void *param);
 
 // Parse the input from a user and act on it
-int chat_parseInput(struct link_Node *node);
+int chat_parseInput(struct chat_QueueJob *job);
 
 // Will send a Message struct to specified node
 int chat_sendMessage(struct chat_Message *msg);

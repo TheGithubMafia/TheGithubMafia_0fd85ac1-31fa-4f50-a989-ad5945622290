@@ -171,12 +171,12 @@ int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
 }
 
 void *com_communicateWithClients(void *param){
-	struct com_ClientList *clientList = param;
-	struct timespec delay = {.tv_nsec = 1000000}; // 1ms
-	int ret;
+    struct com_ClientList *clientList = param;
+    struct timespec delay = {.tv_nsec = 1000000}; // 1ms
+    int ret;
 
     // Initalize the pollfd struct array
-	struct pollfd connections[clientList->maxClients];
+    struct pollfd connections[clientList->maxClients];
     clientList->clients = connections;
 
     // Settings for each pollfd struct
@@ -185,47 +185,54 @@ void *com_communicateWithClients(void *param){
         clientList->clients[x].events = POLLIN | POLLHUP | POLLOUT;
     }
 
-	struct chat_UserData *user;
+    struct chat_UserData *user;
     struct link_Node *node;
-	while(1){
-		pthread_mutex_lock(&clientList->clientListMutex);
+    while(1){
+        pthread_mutex_lock(&clientList->clientListMutex);
 
-		ret = poll(clientList->clients, clientList->maxClients, 50);
-		if(ret != 0){
-			for(int i = 0; i < clientList->maxClients; i++){
+        ret = poll(clientList->clients, clientList->maxClients, 50);
+        if(ret != 0){
+            for(int i = 0; i < clientList->maxClients; i++){
                 int sockfd = clientList->clients[i].fd;
-				if(clientList->clients[i].revents & POLLERR){
-					log_logMessage("Client error", WARNING);
-					close(clientList->clients[i].fd);
-					clientList->clients[i].fd = -1;
-					clientList->connected--;
+                if(clientList->clients[i].revents & POLLERR){
+                    log_logMessage("Client error", WARNING);
+                    close(clientList->clients[i].fd);
+                    clientList->clients[i].fd = -1;
+                    clientList->connected--;
 
-				} else if (clientList->clients[i].revents & POLLHUP){
-					log_logMessage("Client closed connection", INFO);
-					close(clientList->clients[i].fd);
-					clientList->clients[i].fd = -1;
-					clientList->connected--;
+                } else if (clientList->clients[i].revents & POLLHUP){
+                    log_logMessage("Client closed connection", INFO);
+                    close(clientList->clients[i].fd);
+                    clientList->clients[i].fd = -1;
+                    clientList->connected--;
 
-				} else if (clientList->clients[i].revents & POLLIN){
+                } else if (clientList->clients[i].revents & POLLIN){
                     // Really think about what to do if socket is not yet a user
                     node = chat_getUserBySocket(sockfd);
-                    struct chat_UserData *user = (struct chat_UserData *) node->data;
-					int bytes = read(sockfd, user->input, ARRAY_SIZE(user->input));
-					user->input[bytes] = '\0';
-					if(bytes <= 0){
-						if(bytes == 0){
-							log_logMessage("Client disconnect", INFO);
-						} else if(bytes == -1){
-							log_logError("Error reading from client", WARNING);
-						}
+                    struct chat_QueueJob *job = malloc(sizeof(struct chat_QueueJob));
+                    if(job == NULL){
+                            log_logError("Error creating job", DEBUG);
+                            continue;
+                    }
+                    job->node = node;
+                    job->type = 0; // Use string
 
-						close(clientList->clients[i].fd);
-						clientList->clients[i].fd = -1;
-						clientList->connected--;
-					} else {
-                        chat_insertQueue(node);
-					}
-				} else if (clientList->clients[i].revents & POLLOUT){
+                    int bytes = read(sockfd, job->str, ARRAY_SIZE(job->str));
+                    job->str[bytes] = '\0';
+                    if(bytes <= 0){
+                        if(bytes == 0){
+                            log_logMessage("Client disconnect", INFO);
+                        } else if(bytes == -1){
+                            log_logError("Error reading from client", WARNING);
+                        }
+
+                        close(clientList->clients[i].fd);
+                        clientList->clients[i].fd = -1;
+                        clientList->connected--;
+                    } else {
+                        chat_insertQueue(job);
+                    }
+                } else if (clientList->clients[i].revents & POLLOUT){
                     int jobLoc = com_hasJob(&clientList->jobs, clientList->clients[i].fd);
 
                     // User is in job list
@@ -239,19 +246,18 @@ void *com_communicateWithClients(void *param){
                             write(user->socketInfo.socket, user->output, strlen(user->output));
                         }
                     }
-
                 }
-			}
-		} else if (ret < 0) {
-			log_logError("Error with poll()", ERROR);
-			exit(EXIT_FAILURE);
-		}
+            }
+        } else if (ret < 0) {
+            log_logError("Error with poll()", ERROR);
+            exit(EXIT_FAILURE);
+        }
 
-		pthread_mutex_unlock(&clientList->clientListMutex);
-		nanosleep(&delay, NULL); // Allow other threads time to access mutex
-	}
-	
-	return NULL;
+        pthread_mutex_unlock(&clientList->clientListMutex);
+        nanosleep(&delay, NULL); // Allow other threads time to access mutex
+    }
+    
+    return NULL;
 }
 
 //Place a client into one of the poll arrays
