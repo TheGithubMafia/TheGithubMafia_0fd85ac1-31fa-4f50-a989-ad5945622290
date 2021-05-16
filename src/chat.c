@@ -164,6 +164,10 @@ int chat_parseInput(struct link_Node *node){
 }
 
 int chat_sendMessage(struct chat_Message *msg) {
+    if(msg == NULL){
+        return -1;
+    }
+
     char str[BUFSIZ];
     chat_messageToString(msg, str, ARRAY_SIZE(str));
     com_sendStr(msg->userNode, str);
@@ -211,6 +215,21 @@ int chat_findNextSpace(int starting, int size, char *str){
     }
 
     return -1;
+}
+
+// Fill in a struct with a user's node
+int chat_getNameByNode(char buff[NICKNAME_LENGTH], struct link_Node *node){
+    struct chat_UserData *user;
+    user = (struct chat_UserData *) node->data;
+    if(node == NULL || user == NULL){
+        return -1;
+    }
+
+    pthread_mutex_lock(&user->userMutex);
+    strncpy(buff, user->nickname, NICKNAME_LENGTH);
+    pthread_mutex_unlock(&user->userMutex);
+
+    return 1;
 }
 
 //Same as other but uses name to find answer
@@ -347,9 +366,13 @@ struct link_Node *chat_getChannelByName(char *name){
 
 // Create a channel with the specified name
 // TODO - add further channel properties
+// TODO - error checking with link_List
 struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
-    struct chat_Channel *channel;
+    if(name[0] != '#'){
+        return NULL;
+    }
 
+    struct chat_Channel *channel;
     channel = malloc(sizeof(struct chat_Channel));
     if(channel == NULL){
         log_logError("Error creating channel", ERROR);
@@ -360,9 +383,11 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     strncpy(channel->name, name, CHANNEL_NAME_LENGTH);
 
     // Add to the group
-    pthread_mutex_lock(&group->groupMutex);
-    link_add(&group->channels, channel);
-    pthread_mutex_unlock(&group->groupMutex);
+    if(group != NULL){
+        pthread_mutex_lock(&group->groupMutex);
+        link_add(&group->channels, channel);
+        pthread_mutex_unlock(&group->groupMutex);
+    }
 
     pthread_mutex_lock(&serverLists.channelsMutex);
     struct link_Node *node = link_add(&serverLists.channels, channel);
@@ -372,7 +397,9 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
 }
 
 // Add a user to a channel from their node on the main user list
-struct link_Node *chat_addToChannel(struct chat_Channel *channel, struct link_Node *userNode){
+struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode){
+    struct chat_Channel *channel = channelNode->data;
+
     pthread_mutex_lock(&channel->channelMutex);
     struct link_Node *ret = link_add(&channel->users, userNode);
     pthread_mutex_unlock(&channel->channelMutex);
@@ -380,43 +407,17 @@ struct link_Node *chat_addToChannel(struct chat_Channel *channel, struct link_No
     return ret;
 }
 
-// TODO - rewrite to add users to the queue
-int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize){
+// Send a message to every user in a channel
+// user list is a list of nodes to user (LIST->node (from main list)->user)
+int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode){
     struct link_Node *node;
-    struct chat_UserData **user;
-    int ret;
+    struct chat_Channel *channel = channelNode->data;
 
-    if(room == NULL){
-            log_logMessage("Invalid room", WARNING);
-            return -1;
+    for(node = channel->users.head; node != NULL; node = node->next){
+        cmd->userNode = node->data;
+        chat_sendMessage(cmd);
     }
 
-    pthread_mutex_lock(&room->channelMutex);
-    // Loop through each user in the room and send them the message
-    for(node = room->users.head; node != NULL; node = node->next){
-            user = (struct chat_UserData **)node->data;
-            if(user == NULL){
-                    //Add remove user function: invalid user
-                    continue;
-            }
-
-            pthread_mutex_lock(&(**user).userMutex);
-
-            if((**user).socketInfo.socket < 0){
-                    //deal with offline user
-                    continue;
-            }
-
-            if((**user).socketInfo.socket >= 0){//Do nothing if negative socket fd
-                    ret = write((**user).socketInfo.socket, msg, msgSize);
-                    if(ret < 1){
-                            log_logError("Error sending to client", DEBUG);
-                    }
-            }
-            pthread_mutex_unlock(&(**user).userMutex);
-    }
-
-    pthread_mutex_unlock(&room->channelMutex);
-
-    return 0;
+    return 1;
 }
+

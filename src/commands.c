@@ -26,6 +26,7 @@ int init_commands() {
 
     cmd_addCommand(0, "NICK", &cmd_nick);
     cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
+    cmd_addCommand(2, "JOIN", &cmd_join);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
@@ -53,7 +54,7 @@ int cmd_runCommand(struct chat_Message *cmd){
     struct link_Node *cmdNode;
     struct chat_Message reply;
     struct cmd_Command *command;
-    int ret = -1;
+    int ret = -2;
 
     // Loop thru the commands looking for the same command
     pthread_mutex_lock(&cmd_commandList.commandMutex);
@@ -70,14 +71,16 @@ int cmd_runCommand(struct chat_Message *cmd){
     }
     pthread_mutex_unlock(&cmd_commandList.commandMutex);
 
-    // Unknown command
-    if(ret == -1){
+    // Unknown command: -1 is reserved for known command error
+    if(ret == -2){
         memcpy(&reply, &cmd_defaultError, sizeof(reply));
         reply.userNode = cmd->userNode;
         strncat(reply.params[0], cmd->command, 15);
     }
 
-    chat_sendMessage(&reply);
+    if(ret != 2){ // 2 is a request that message is not sent
+        chat_sendMessage(&reply);
+    }
     return ret;
 }
 
@@ -129,11 +132,9 @@ const char *privmsg_usage = ":Usage: <receiver> <message>";
 const char *privmsg_userNotFound = ":Nick not found!";
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
-    struct chat_UserData *user;
     char *params[ARRAY_SIZE(cmd->params)];
     char numeric[NUMERIC_SIZE];
     int size = 0;
-    user = (struct chat_UserData *) node->data;
     
     if(cmd->paramCount != 2){
         params[0] = (char *) privmsg_usage;
@@ -155,9 +156,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
 
     // Success
     char nickname[NICKNAME_LENGTH];
-    pthread_mutex_lock(&user->userMutex);
-    strncpy(nickname, user->nickname, NICKNAME_LENGTH);
-    pthread_mutex_unlock(&user->userMutex);
+    chat_getNameByNode(nickname, node);
 
     params[0] = cmd->params[0];
     params[1] = cmd->params[1];
@@ -166,4 +165,52 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
 
     chat_createMessage(reply, otherUserNode, nickname, numeric, params, size);
     return 1;
+}
+
+// Join a channel
+// TODO - key for access
+// TODO - add error checking
+const char *join_usage = ":Usage: <channel>";
+const char *join_invalidChanName = ":Invalid channel name: start with #";
+int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
+    struct link_Node *node = cmd->userNode;
+    char *params[ARRAY_SIZE(cmd->params)];
+    int size = 1;
+    
+    if(cmd->paramCount != 1){
+        params[0] = (char *) join_usage;
+        chat_createMessage(reply, node, thisServer, ERR_NEEDMOREPARAMS, params, size);
+        return -1;
+    }
+
+    if(cmd->params[0][0] != '#'){
+        params[0] = (char *) join_invalidChanName;
+        chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
+        return -1;
+    }
+
+    struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
+    if(channel == NULL){
+        channel = chat_createChannel(cmd->params[0], NULL);
+
+        if(channel == NULL){
+           return -2; // Add better error later
+        }
+
+        char msg[100] = "Created new channel: ";
+        strncat(msg, cmd->params[0], ARRAY_SIZE(msg) - strlen(msg) - 1);
+        log_logMessage(msg, INFO);
+    }
+
+    chat_addToChannel(channel, node); 
+
+    // Success
+    char nickname[NICKNAME_LENGTH];
+    chat_getNameByNode(nickname, node);
+    params[0] = cmd->params[0];
+    size = 1;
+
+    chat_createMessage(reply, node, nickname, "JOIN", params, size);
+    chat_sendChannelMessage(reply, channel);
+    return 2;
 }

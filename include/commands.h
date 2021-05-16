@@ -32,4 +32,6 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);
 
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply);
 
+int cmd_join(struct chat_Message *cmd, struct chat_Message *reply);
+
 #endif

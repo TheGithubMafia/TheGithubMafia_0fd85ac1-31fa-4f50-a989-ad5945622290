@@ -108,6 +108,9 @@ int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr);
 // Locate the next space character
 int chat_findNextSpace(int starting, int size, char *str);
 
+// Fill in a struct with a user's node
+int chat_getNameByNode(char buff[NICKNAME_LENGTH], struct link_Node *userNode);
+
 //Get a user's node in the main list by name
 struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]);
 
@@ -120,13 +123,16 @@ struct link_Node *chat_getUserBySocket(int sock);
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
 
+// Returns the node to a channel if it exists
+struct link_Node *chat_getChannelByName(char *name);
+
 // Create a channel with the specified name, and add it to the specified group
 struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
 
 // Places a pointer to the user into the Channel's list, and create it if needed
-struct link_Node *chat_addToChannel(struct chat_Channel *room, struct link_Node *user);
+struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode);
 
 // Sends a message to all online users in this room
-int chat_sendChannelMsg(struct chat_Channel *room, char *msg, int msgSize);
+int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode);
 
 #endif
