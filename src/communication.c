@@ -22,29 +22,29 @@ int com_serverSocket = -1;
 
 int init_server(){
     // Initalize the server socket
-	com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
-	if(com_serverSocket < 0){
-		log_logMessage("Retrying with IPv4...", INFO);
-		com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 1);
-		if(com_serverSocket < 0){
-			return -1;
-		}
-	}
+    com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 0);
+    if(com_serverSocket < 0){
+        log_logMessage("Retrying with IPv4...", INFO);
+        com_serverSocket = com_startServerSocket(&fig_Configuration, &serverSockAddr, 1);
+        if(com_serverSocket < 0){
+                return -1;
+        }
+    }
 
     //Check that the config data is correct
-	if(fig_Configuration.threadsIO < 1){
-		fig_Configuration.threadsIO = 1;
-		log_logMessage("Must have at least 1 IO thread! Using 1 IO thread", WARNING);
-	}	
+    if(fig_Configuration.threadsIO < 1){
+        fig_Configuration.threadsIO = 1;
+        log_logMessage("Must have at least 1 IO thread! Using 1 IO thread", WARNING);
+    }	
 
-	if(fig_Configuration.clients <= 0){
-		fig_Configuration.clients = 20;
-		log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
-	}
-	chat_setMaxUsers(fig_Configuration.clients);
+    if(fig_Configuration.clients <= 0){
+        fig_Configuration.clients = 20;
+        log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
+    }
+    chat_setMaxUsers(fig_Configuration.clients);
 
     // Allocate memory based on size from configuration
-	clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
+    clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
     if (clientList == NULL) {
         log_logError("Error initalizing clientList", ERROR);
         return -1;
@@ -73,19 +73,20 @@ void com_close(){
     free(clientList);
 }
 
+// Make a new job and insert it into the queue for sending
 int com_sendStr(struct link_Node *node, char *msg){
-    struct chat_UserData *user = (struct chat_UserData *) node->data;
+    struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
+    job->node = node;
 
-    pthread_mutex_lock(&user->userMutex);
-    snprintf(user->output, ARRAY_SIZE(user->output), "%s\r\n", msg);
-    com_insertQueue(node);
-    pthread_mutex_unlock(&user->userMutex);
+    snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
+    com_insertQueue(job);
 
     return 1;
 }
 
-int com_insertQueue(struct link_Node *node){
+int com_insertQueue(struct com_QueueJob *job){
     struct com_ClientList *cliList = NULL;
+    struct link_Node *node = job->node;
     struct chat_UserData *user = (struct chat_UserData *) node->data;
     int sockfd = user->socketInfo.socket;
 
@@ -97,7 +98,7 @@ int com_insertQueue(struct link_Node *node){
 
         if(com_hasSocket(sockfd, cliList->clients, cliList->maxClients) >= 0){
             pthread_mutex_lock(&cliList->jobs.queueMutex); 
-            struct link_Node *ret = link_add(&cliList->jobs.queue, node);
+            struct link_Node *ret = link_add(&cliList->jobs.queue, job);
             if(ret == NULL){
                 log_logMessage("Error adding job to queue", WARNING);
             }
@@ -156,7 +157,7 @@ int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
     pthread_mutex_lock(&dataQ->queueMutex); 
 
     for(node = dataQ->queue.head; node != NULL; node = node->next){
-        user = ((struct link_Node *) node->data)->data;
+        user = ((struct com_QueueJob *) node->data)->node->data;
 
         if(user->socketInfo.socket == sockfd){
             pthread_mutex_unlock(&dataQ->queueMutex); 
@@ -193,6 +194,7 @@ void *com_communicateWithClients(void *param){
         ret = poll(clientList->clients, clientList->maxClients, 50);
         if(ret != 0){
             for(int i = 0; i < clientList->maxClients; i++){
+                struct com_QueueJob *job;
                 int sockfd = clientList->clients[i].fd;
                 if(clientList->clients[i].revents & POLLERR){
                     log_logMessage("Client error", WARNING);
@@ -209,7 +211,7 @@ void *com_communicateWithClients(void *param){
                 } else if (clientList->clients[i].revents & POLLIN){
                     // Really think about what to do if socket is not yet a user
                     node = chat_getUserBySocket(sockfd);
-                    struct chat_QueueJob *job = malloc(sizeof(struct chat_QueueJob));
+                    job = malloc(sizeof(struct com_QueueJob));
                     if(job == NULL){
                             log_logError("Error creating job", DEBUG);
                             continue;
@@ -220,6 +222,7 @@ void *com_communicateWithClients(void *param){
                     int bytes = read(sockfd, job->str, ARRAY_SIZE(job->str));
                     job->str[bytes] = '\0';
                     if(bytes <= 0){
+                        free(job);
                         if(bytes == 0){
                             log_logMessage("Client disconnect", INFO);
                         } else if(bytes == -1){
@@ -238,13 +241,14 @@ void *com_communicateWithClients(void *param){
                     // User is in job list
                     if(jobLoc >= 0){
                         pthread_mutex_lock(&clientList->jobs.queueMutex); 
-                        node = link_remove(&clientList->jobs.queue, jobLoc);
-                        user = node->data;
+                        job = link_remove(&clientList->jobs.queue, jobLoc);
+                        user = job->node->data;
                         pthread_mutex_unlock(&clientList->jobs.queueMutex); 
 
                         if(node != NULL && user != NULL){
-                            write(user->socketInfo.socket, user->output, strlen(user->output));
+                            write(user->socketInfo.socket, job->str, strlen(job->str));
                         }
+                        free(job);
                     }
                 }
             }

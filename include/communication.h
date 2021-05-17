@@ -29,18 +29,26 @@ struct com_DataQueue {
     pthread_mutex_t queueMutex;
 };
 
+// Jobs for queues
+struct com_QueueJob {
+    int type;
+    struct link_Node *node;
+    char str[1024];
+    struct chat_Message *msg; 
+};
+
 //struct to store data about the socket, and its file descriptor
 struct com_SocketInfo {
-	int socket;
-	struct sockaddr_storage addr;
+    int socket;
+    struct sockaddr_storage addr;
 };
 
 //struct to store data about each thread's pollfd struct
 struct com_ClientList {
-	int maxClients;
-	int connected;
-	int threadNum;
-	struct pollfd *clients; /* pollfd array for poll() */
+    int maxClients;
+    int connected;
+    int threadNum;
+    struct pollfd *clients; /* pollfd array for poll() */
     pthread_t thread;
     pthread_mutex_t clientListMutex;
     struct com_DataQueue jobs;
@@ -58,8 +66,7 @@ void com_close();
 int com_sendStr(struct link_Node *node, char *msg);
 
 // Insert selected node into the correct queue for processing
-// Mutex is handled by this function internally
-int com_insertQueue(struct link_Node *node);
+int com_insertQueue(struct com_QueueJob *job);
 
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);

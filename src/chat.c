@@ -64,7 +64,7 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int chat_insertQueue(struct chat_QueueJob *job){
+int chat_insertQueue(struct com_QueueJob *job){
     pthread_mutex_lock(&dataQueue.queueMutex); 
     link_add(&dataQueue.queue, job);
     pthread_mutex_unlock(&dataQueue.queueMutex); 
@@ -77,10 +77,10 @@ void *chat_processQueue(void *param){
     struct timespec delay = {.tv_nsec = 1000000}; // 1ms
 
     while(1) { 
-        struct chat_QueueJob *job = NULL;
+        // Make sure to set as null to prevent undefined behavior
+        struct com_QueueJob *job = NULL;
 
-        // grab from first item in linked list: expecting a link_Node of the user
-        // also make sure list isn't empty
+        // grab from first item in linked list expecting link_Node of user
         pthread_mutex_lock(&dataQ->queueMutex);
         if(link_isEmpty(&dataQ->queue) < 0){
             job = link_remove(&dataQ->queue, 0);
@@ -89,13 +89,14 @@ void *chat_processQueue(void *param){
 
         // Nothing to process
         if(job == NULL){
-            nanosleep(&delay, NULL); // Allow other threads time to access mutex
+            // Allow other threads time to access mutex
+            nanosleep(&delay, NULL); 
             continue;
         }
 
         if(job->type == 0){ // Text to cmd
             chat_parseInput(job); 
-        } else { // Run the cmd
+        } else if (job->type == 1){ // Run the cmd
             cmd_runCommand(job->msg);
             free(job->msg);
         }
@@ -108,10 +109,10 @@ void *chat_processQueue(void *param){
 
 // TODO - Support multiple cmds in one read
 // TODO - Handle null bytes? also handle MAJOR issues with memcpy (size of copied)
-int chat_parseInput(struct chat_QueueJob *job){
+int chat_parseInput(struct com_QueueJob *job){
     struct link_Node *node = job->node;
     struct chat_Message *cmd = malloc(sizeof(struct chat_Message));
-    struct chat_QueueJob *cmdJob;
+    struct com_QueueJob *cmdJob;
 
     if(cmd == NULL){
             log_logError("Error creating cmd struct", DEBUG);
@@ -169,9 +170,8 @@ int chat_parseInput(struct chat_QueueJob *job){
 
     cmd->userNode = node;
 
-    printf("%d\n", cmd->paramCount);
     // Create job to execute command
-    cmdJob = malloc(sizeof(struct chat_QueueJob));
+    cmdJob = malloc(sizeof(struct com_QueueJob));
     if(cmdJob == NULL){
             log_logError("Error creating job", DEBUG);
             free(cmd);

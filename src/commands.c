@@ -232,6 +232,23 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 
     chat_createMessage(reply, node, nickname, "JOIN", params, size);
     chat_sendChannelMessage(reply, channel);
+
+    // Generate a NAMES command reply to the user for this channel
+    struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
+    if(job == NULL){
+            log_logError("Error creating job", DEBUG);
+            return 2;
+    }
+    job->type = 1;
+    struct chat_Message *jobMsg = malloc(sizeof(struct chat_Message));
+    if(jobMsg == NULL){
+            log_logError("Error creating command", DEBUG);
+            return 2;
+    }
+    chat_createMessage(jobMsg, node, thisServer, "NAMES", params, 1);
+    job->msg = jobMsg;
+    chat_insertQueue(job);
+
     return 2;
 }
 

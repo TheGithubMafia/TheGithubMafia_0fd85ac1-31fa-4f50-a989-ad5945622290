@@ -14,11 +14,11 @@
 #define CHANNEL_NAME_LENGTH 201
 
 /*  Note about the structure of the users
-	All new users are added to the main linked
-	list via malloc. All other uses to users should
-	access the user through a pointer to the pointer
-	inside the main list so that one free() will notify
-	all other pointers that the user no longer exists
+    All new users are added to the main linked
+    list via malloc. All other uses to users should
+    access the user through a pointer to the pointer
+    inside the main list so that one free() will notify
+    all other pointers that the user no longer exists
 */
 struct chat_ServerLists {
 	int max;
@@ -65,13 +65,6 @@ struct chat_DataQueue {
     pthread_mutex_t queueMutex;
 };
 
-struct chat_QueueJob {
-    int type;
-    struct link_Node *node;
-    char str[1024];
-    struct chat_Message *msg; 
-};
-
 // Contains all parts of a typical message
 // The userNode is used to identify the user when receiving
 // and used to identify the recipient when sending
@@ -94,14 +87,14 @@ int chat_setupDataThreads(struct fig_ConfigData *config);
 
 // Insert selected node into the queue for processing
 // Mutex is handled by this function internally
-int chat_insertQueue(struct chat_QueueJob *job);
+int chat_insertQueue(struct com_QueueJob *job);
 
 // Process the queue's contents and then send data back
 // to the communication queue for sending back to clients
 void *chat_processQueue(void *param);
 
 // Parse the input from a user and act on it
-int chat_parseInput(struct chat_QueueJob *job);
+int chat_parseInput(struct com_QueueJob *job);
 
 // Will send a Message struct to specified node
 int chat_sendMessage(struct chat_Message *msg);
