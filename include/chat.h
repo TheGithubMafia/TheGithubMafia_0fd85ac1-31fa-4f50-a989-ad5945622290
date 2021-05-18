@@ -122,7 +122,7 @@ struct link_Node *chat_getUserBySocket(int sock);
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
 
 // Remove a user from the server
-int chat_deleteUser(char name[NICKNAME_LENGTH]);
+int chat_deleteUser(struct link_Node *userNode);
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode);
 

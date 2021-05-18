@@ -225,6 +225,7 @@ void *com_communicateWithClients(void *param){
                         free(job);
                         if(bytes == 0){
                             log_logMessage("Client disconnect", INFO);
+                            chat_deleteUser(node);
                         } else if(bytes == -1){
                             log_logError("Error reading from client", WARNING);
                         }

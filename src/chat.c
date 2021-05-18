@@ -361,15 +361,24 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
 }
 
 // Delete a user from all occurences
-int chat_deleteUser(char name[NICKNAME_LENGTH]){
+int chat_deleteUser(struct link_Node *userNode){
+    struct chat_UserData *user = userNode->data;
+
     // Channels
+    chat_removeUserFromAllChannels(userNode);
 
     // Groups
 
     // Main list
+    pthread_mutex_lock(&serverLists.usersMutex);
+    int pos = link_indexOf(&serverLists.users, userNode);
+    link_remove(&serverLists.users, pos);
+    pthread_mutex_unlock(&serverLists.usersMutex);
 
     // free() actual user
-    return name[0];
+    free(user);
+
+    return 1;
 }
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode){
@@ -377,6 +386,11 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *
     struct chat_Channel *channel = channelNode->data;
     int ret = -1;
     int pos = 0;
+
+    if(channel == NULL || userNode == NULL){
+        log_logMessage("Cannot remove user from channel", DEBUG);
+        return -1;
+    }
 
     pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL; node = node->next){
@@ -398,14 +412,15 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *
 
 int chat_removeUserFromAllChannels(struct link_Node *userNode){
     struct link_Node *node;
-    struct link_Node *channel;
     int ret = -1;
 
     pthread_mutex_lock(&serverLists.channelsMutex);
 
     for(node = serverLists.channels.head; node != NULL; node = node->next){
-            channel = node->data;
-            int num = chat_removeUserFromChannel(channel, userNode);
+            // Unlock main list while processing
+            pthread_mutex_unlock(&serverLists.channelsMutex);
+            int num = chat_removeUserFromChannel(node, userNode);
+            pthread_mutex_lock(&serverLists.channelsMutex);
 
             ret = ret == -1 ? num : ret;
     }
