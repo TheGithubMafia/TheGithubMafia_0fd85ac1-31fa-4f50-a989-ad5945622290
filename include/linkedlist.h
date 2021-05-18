@@ -32,6 +32,8 @@ struct link_Node *link_add(struct link_List *list, void *data);
  */
 void *link_remove(struct link_List *list, int pos);
 
+int link_indexOf(struct link_List *list, struct link_Node *target);
+
 struct link_Node *link_getNode(struct link_List *list, int pos);
 
 #endif

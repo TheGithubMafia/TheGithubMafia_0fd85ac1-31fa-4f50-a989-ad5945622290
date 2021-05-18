@@ -71,6 +71,23 @@ void *link_remove(struct link_List *list, int pos){
     return data;
 }
 
+int link_indexOf(struct link_List *list, struct link_Node *target){
+    int index = -1;
+    struct link_Node *node;
+
+    int pos = 0;
+    for(node = list->head; node != NULL; node = node->next){
+       if(node == target){
+            index = pos;
+            break;
+       }
+
+       pos++;
+    }
+
+    return index;
+}
+
 struct link_Node *link_getNode(struct link_List *list, int pos){
     if(list->head == NULL || pos < 0){
             return NULL;

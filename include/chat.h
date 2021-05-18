@@ -39,8 +39,6 @@ struct chat_UserData {
 	size_t id;
 	struct com_SocketInfo socketInfo;	
 	char nickname[NICKNAME_LENGTH + 1];
-	char input[1024];
-	char output[1024];
 	pthread_mutex_t userMutex;
 };
 
@@ -122,6 +120,13 @@ struct link_Node *chat_getUserBySocket(int sock);
 
 // Returns the node to a new user, also automatically adds the user to the main list
 struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
+
+// Remove a user from the server
+int chat_deleteUser(char name[NICKNAME_LENGTH]);
+
+int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode);
+
+int chat_removeUserFromAllChannels(struct link_Node *userNode);
 
 // Returns the node to a channel if it exists
 struct link_Node *chat_getChannelByName(char *name);

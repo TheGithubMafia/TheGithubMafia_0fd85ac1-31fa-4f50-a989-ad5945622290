@@ -40,4 +40,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply);
 // Return a list of names inside a channel
 int cmd_names(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Remove a user from a channel
+int cmd_part(struct chat_Message *cmd, struct chat_Message *reply);
+
 #endif

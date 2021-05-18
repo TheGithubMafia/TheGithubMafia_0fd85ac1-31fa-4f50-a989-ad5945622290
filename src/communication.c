@@ -267,56 +267,56 @@ void *com_communicateWithClients(void *param){
 //Place a client into one of the poll arrays
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
     //Go thru each clientList and see which one has the least connected clients
-	int least = -1, numConnected = INT_MAX;
-	for(int i = 0; i < numThreads; i++){
-		pthread_mutex_lock(&clientList[i].clientListMutex);
-		if(clientList[i].connected < clientList[i].maxClients){
-			if(least == -1 || clientList[i].connected < numConnected){
-				least = i;
-				numConnected = clientList[i].connected;
-			}
-		}	
-		pthread_mutex_unlock(&clientList[i].clientListMutex);
-	}
+    int least = -1, numConnected = INT_MAX;
+    for(int i = 0; i < numThreads; i++){
+        pthread_mutex_lock(&clientList[i].clientListMutex);
+        if(clientList[i].connected < clientList[i].maxClients){
+            if(least == -1 || clientList[i].connected < numConnected){
+                least = i;
+                numConnected = clientList[i].connected;
+            }
+        }	
+        pthread_mutex_unlock(&clientList[i].clientListMutex);
+    }
 
-	if(least != -1){
-		pthread_mutex_lock(&clientList[least].clientListMutex);
-		clientList[least].connected++;
-		
-		int selectedSpot = 0;
-		for(int i = 0; i < clientList[least].maxClients; i++){
-			if(clientList[least].clients[i].fd < 0){
-				selectedSpot = i;
-				break;
-			}
-		}
-		clientList[least].clients[selectedSpot].fd = addr.socket;
-		
-		pthread_mutex_unlock(&clientList[least].clientListMutex);
+    if(least != -1){
+        pthread_mutex_lock(&clientList[least].clientListMutex);
+        clientList[least].connected++;
+        
+        int selectedSpot = 0;
+        for(int i = 0; i < clientList[least].maxClients; i++){
+            if(clientList[least].clients[i].fd < 0){
+                selectedSpot = i;
+                break;
+            }
+        }
+        clientList[least].clients[selectedSpot].fd = addr.socket;
+        
+        pthread_mutex_unlock(&clientList[least].clientListMutex);
 
         chat_createUser(&addr, "NOOB1");
 
-		return least;
-	}
+        return least;
+    }
 
-	log_logMessage("Reached max clients!", WARNING);
-	return -1;
+    log_logMessage("Reached max clients!", WARNING);
+    return -1;
 }
 
 int com_setupIOThreads(struct fig_ConfigData *config){
-	char buff[BUFSIZ];
+    char buff[BUFSIZ];
     int numThreads = config->threadsIO;
 
-	// Setup data for the ClientList and then start its thread
-	int leftOver = config->clients % numThreads; // Get remaining spots for each thread
+    // Setup data for the ClientList and then start its thread
+    int leftOver = config->clients % numThreads; // Get remaining spots for each thread
     int ret = 0;
-	for(int i = 0; i < numThreads; i++){
-		clientList[i].maxClients = config->clients / numThreads;
-		if(leftOver > 0){
-			clientList[i].maxClients++;
-			leftOver--;
-		}
-		clientList[i].threadNum = i;
+    for(int i = 0; i < numThreads; i++){
+        clientList[i].maxClients = config->clients / numThreads;
+        if(leftOver > 0){
+            clientList[i].maxClients++;
+            leftOver--;
+        }
+        clientList[i].threadNum = i;
 
         // Initialize the mutex to prevent locking issues
         ret = pthread_mutex_init(&clientList[i].clientListMutex, NULL);
@@ -325,13 +325,13 @@ int com_setupIOThreads(struct fig_ConfigData *config){
             return -1;
         }
 
-		ret = pthread_create(&clientList[i].thread, NULL, com_communicateWithClients, &clientList[i]);
-		if(ret != 0){
-			snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
-			log_logMessage(buff, ERROR);
-			return -1;
-		}
-	}
+        ret = pthread_create(&clientList[i].thread, NULL, com_communicateWithClients, &clientList[i]);
+        if(ret != 0){
+            snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
+            log_logMessage(buff, ERROR);
+            return -1;
+        }
+    }
 	snprintf(buff, ARRAY_SIZE(buff), "Successfully listening on %d threads", numThreads);
 	log_logMessage(buff, INFO);
 

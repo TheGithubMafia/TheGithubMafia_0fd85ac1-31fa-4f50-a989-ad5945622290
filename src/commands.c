@@ -31,6 +31,7 @@ int init_commands() {
     cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
     cmd_addCommand(2, "JOIN", &cmd_join);
     cmd_addCommand(3, "NAMES", &cmd_names);
+    cmd_addCommand(4, "PART", &cmd_part);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
@@ -284,5 +285,39 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     size = 4;
 
     chat_createMessage(reply, node, thisServer, RPL_NAMREPLY, params, size);
+    return 1;
+}
+
+// Leave a channel
+// TODO - add error checking
+int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
+    struct link_Node *node = cmd->userNode;
+    char *params[ARRAY_SIZE(cmd->params)];
+    int size = 1;
+    
+    if(cmd->paramCount != 1){
+        params[0] = (char *) join_usage;
+        chat_createMessage(reply, node, thisServer, ERR_NEEDMOREPARAMS, params, size);
+        return -1;
+    }
+
+    struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
+    if(cmd->params[0][0] != '#' || channel == NULL){
+        params[0] = (char *) invalidChanName;
+        chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
+        return -1;
+    }
+
+    chat_removeUserFromChannel(channel, node); // Check for error
+
+    // Success
+    char nickname[NICKNAME_LENGTH];
+    chat_getNameByNode(nickname, node);
+    params[0] = cmd->params[0];
+    size = 1;
+
+    chat_createMessage(reply, node, nickname, "PART", params, size);
+    chat_sendChannelMessage(reply, channel);
+
     return 1;
 }
