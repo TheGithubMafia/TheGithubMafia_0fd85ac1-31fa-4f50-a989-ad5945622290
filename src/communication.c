@@ -19,6 +19,9 @@ struct com_ClientList *clientList;
 
 struct com_SocketInfo serverSockAddr;
 int com_serverSocket = -1;
+int com_numThreads = -1;
+
+extern struct chat_ServerLists serverLists;
 
 int init_server(){
     // Initalize the server socket
@@ -60,7 +63,7 @@ int init_server(){
     }
 
     //Setup threads for listening
-    com_setupIOThreads(&fig_Configuration);
+    com_numThreads = com_setupIOThreads(&fig_Configuration);
 
     return 1;
 }
@@ -84,10 +87,65 @@ int com_sendStr(struct link_Node *node, char *msg){
     return 1;
 }
 
+// Will remove all instances of a user from the queue
+int com_cleanQueue(struct link_Node *userNode, int sock){
+    struct com_ClientList *cliList;
+    struct link_Node *node;
+    struct com_QueueJob *job;
+
+    // Search thru each job list for each thread
+    for (int i = 0; i < com_numThreads; i++){
+        cliList = &clientList[i];
+
+        pthread_mutex_lock(&cliList->clientListMutex); 
+        if(com_hasSocket(sock, cliList) >= 0){
+            pthread_mutex_lock(&cliList->jobs.queueMutex); 
+
+            int notFinished = 1;
+            while(notFinished){ // Restart search: item removed->list changes
+                int pos = 0;
+                notFinished = 0;
+                for(node = cliList->jobs.queue.head; node != NULL; node = node->next){
+                    job = node->data;
+                    if(job->node == userNode){
+                        free(link_remove(&cliList->jobs.queue, pos));
+                        notFinished = 1;
+                        break;
+                    }
+
+                    pos++;
+                }
+            }
+
+            pthread_mutex_unlock(&cliList->jobs.queueMutex); 
+            pthread_mutex_unlock(&cliList->clientListMutex); 
+            return 1;
+        }
+
+        pthread_mutex_unlock(&cliList->clientListMutex); 
+    }
+
+    return -1;
+}
+
 int com_insertQueue(struct com_QueueJob *job){
     struct com_ClientList *cliList = NULL;
     struct link_Node *node = job->node;
     struct chat_UserData *user = (struct chat_UserData *) node->data;
+    int nodeIsValid = -1;
+
+    pthread_mutex_lock(&serverLists.usersMutex);
+    nodeIsValid = link_containsNode(&serverLists.users, node);
+    pthread_mutex_unlock(&serverLists.usersMutex);
+
+    if(nodeIsValid == -1 || !node->data){ // User is disconnecting; nothing new to be sent
+        log_logMessage("User no longer valid", TRACE);
+        return -1; 
+    }
+
+    // Guard to make sure user does not disconnect during this
+    pthread_mutex_lock(&user->userMutex);
+
     int sockfd = user->socketInfo.socket;
 
     // Search through each pollfd struct to find the correct queue to insert job
@@ -96,7 +154,7 @@ int com_insertQueue(struct com_QueueJob *job){
 
         pthread_mutex_lock(&cliList->clientListMutex); 
 
-        if(com_hasSocket(sockfd, cliList->clients, cliList->maxClients) >= 0){
+        if(com_hasSocket(sockfd, cliList) >= 0){
             pthread_mutex_lock(&cliList->jobs.queueMutex); 
             struct link_Node *ret = link_add(&cliList->jobs.queue, job);
             if(ret == NULL){
@@ -110,6 +168,7 @@ int com_insertQueue(struct com_QueueJob *job){
 
         pthread_mutex_unlock(&cliList->clientListMutex); 
     }
+    pthread_mutex_unlock(&user->userMutex);
 
     return 1;
 }
@@ -138,7 +197,10 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 
 // Will determine if the specified socket fd is inside a pollfd struct
 // For use inside of a thread; Make sure to lock this externally if needed
-int com_hasSocket(int socket, struct pollfd *conns, int size){
+int com_hasSocket(int socket, struct com_ClientList *cliList){
+    struct pollfd *conns = cliList->clients;
+    int size = cliList->maxClients;
+
     for(int i = 0; i < size; i++){
         if(conns[i].fd == socket){
             return i;
@@ -225,14 +287,13 @@ void *com_communicateWithClients(void *param){
                         free(job);
                         if(bytes == 0){
                             log_logMessage("Client disconnect", INFO);
-                            chat_deleteUser(node);
                         } else if(bytes == -1){
                             log_logError("Error reading from client", WARNING);
                         }
 
-                        close(clientList->clients[i].fd);
-                        clientList->clients[i].fd = -1;
-                        clientList->connected--;
+                        pthread_mutex_unlock(&clientList->clientListMutex);
+                        chat_deleteUser(node);
+                        pthread_mutex_lock(&clientList->clientListMutex);
                     } else {
                         chat_insertQueue(job);
                     }
@@ -265,6 +326,30 @@ void *com_communicateWithClients(void *param){
     return NULL;
 }
 
+// Remove a client from polling and close the socket
+int com_removeClient(int sock){
+    struct com_ClientList *currentList;
+
+    for(int i = 0; i < com_numThreads; i++){
+        currentList = &clientList[i];
+
+        pthread_mutex_lock(&currentList->clientListMutex);
+        for(int x = 0; x < currentList->maxClients; x++){
+            // Match
+            if(currentList->clients[x].fd == sock){
+                close(currentList->clients[x].fd);
+                currentList->clients[x].fd = -1;
+                currentList->connected--;
+                pthread_mutex_unlock(&currentList->clientListMutex);
+                return 1;
+            }
+        }
+        pthread_mutex_unlock(&currentList->clientListMutex);
+    }
+
+    return -1;
+}
+
 //Place a client into one of the poll arrays
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
     //Go thru each clientList and see which one has the least connected clients
@@ -295,7 +380,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
         
         pthread_mutex_unlock(&clientList[least].clientListMutex);
 
-        chat_createUser(&addr, "NOOB1");
+        chat_createUser(&addr, "Unregistered");
 
         return least;
     }

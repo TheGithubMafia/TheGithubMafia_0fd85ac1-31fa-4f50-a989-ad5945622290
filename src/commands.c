@@ -27,24 +27,24 @@ int init_commands() {
     cmd_unknownCommand.userNode = NULL;
 
 
-    cmd_addCommand(0, "NICK", &cmd_nick);
-    cmd_addCommand(1, "PRIVMSG", &cmd_privmsg);
-    cmd_addCommand(2, "JOIN", &cmd_join);
-    cmd_addCommand(3, "NAMES", &cmd_names);
-    cmd_addCommand(4, "PART", &cmd_part);
+    cmd_addCommand("NICK", 1, &cmd_nick);
+    cmd_addCommand("PRIVMSG", 2, &cmd_privmsg);
+    cmd_addCommand("JOIN", 1, &cmd_join);
+    cmd_addCommand("NAMES", 1, &cmd_names);
+    cmd_addCommand("PART", 1, &cmd_part);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
 }
 
-int cmd_addCommand(int numeric, char *word, int (*func)(struct chat_Message *, struct chat_Message *)) {
+int cmd_addCommand(char *word, int minParams, int (*func)(struct chat_Message *, struct chat_Message *)) {
     struct cmd_Command *command = malloc(sizeof(struct cmd_Command));
     if(command == NULL){
         log_logError("Failed to allocate cmd_Command!", DEBUG);
         return -1;
     }
 
-    command->numeric = numeric;
+    command->minParams = minParams;
     strncpy(command->word, word, ARRAY_SIZE(command->word));	
     command->func = func;
 
@@ -70,7 +70,17 @@ int cmd_runCommand(struct chat_Message *cmd){
 
         command = cmdNode->data;
         if(!strncmp(command->word, cmd->command, ARRAY_SIZE(command->word))){
+            // Successful match
             pthread_mutex_unlock(&cmd_commandList.commandMutex);
+            ret = -1; // Default to failure
+
+            // Check number of params
+            if(cmd->paramCount < command->minParams){
+                char *params[] = {":Command needs more params"};
+                chat_createMessage(&reply, cmd->userNode, thisServer, ERR_NEEDMOREPARAMS, params, 1);
+                break;
+            }
+
             ret = command->func(cmd, &reply);
             break;
         }
@@ -248,6 +258,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     }
     chat_createMessage(jobMsg, node, thisServer, "NAMES", params, 1);
     job->msg = jobMsg;
+    job->node = node;
     chat_insertQueue(job);
 
     return 2;

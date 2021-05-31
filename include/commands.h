@@ -14,9 +14,12 @@ struct cmd_CommandList {
     pthread_mutex_t commandMutex;
 };
 
+// The array of strings gives possible responses
+// index 0 = usage
 struct cmd_Command {
-    int numeric;
     char word[50];
+    int minParams;
+    char responses[5][50];
     int (*func)(struct chat_Message *, struct chat_Message *);
 };
 
@@ -24,7 +27,7 @@ int init_commands();
 
 // Will use parameters to construct a cmd_Command struct
 // and adds it to the cmd_commandList struct
-int cmd_addCommand(int numeric, char *word, int (*func)(struct chat_Message *, struct chat_Message *));
+int cmd_addCommand(char *word, int minParams, int (*func)(struct chat_Message *, struct chat_Message *));
 
 int cmd_runCommand(struct chat_Message *cmd);
 

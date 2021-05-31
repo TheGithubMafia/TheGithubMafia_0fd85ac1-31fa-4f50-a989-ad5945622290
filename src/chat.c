@@ -94,11 +94,34 @@ void *chat_processQueue(void *param){
             continue;
         }
 
-        if(job->type == 0){ // Text to cmd
-            chat_parseInput(job); 
-        } else if (job->type == 1){ // Run the cmd
-            cmd_runCommand(job->msg);
-            free(job->msg);
+        if(!job->node){
+            log_logMessage("Job node is NULL", DEBUG);
+            free(job);
+            continue;
+        }
+
+        if(job->type == 2) { // remove node
+            printf("dogma\n");
+            pthread_mutex_lock(&serverLists.usersMutex);
+            link_removeNode(&serverLists.users, job->node);
+            printf("dogma\n");
+            pthread_mutex_unlock(&serverLists.usersMutex);
+
+            free(job);
+            continue;
+        }
+
+        if(job->node->data){ // Make sure user is valid
+            switch (job->type) {
+                case 0: // Text to cmd
+                    chat_parseInput(job); 
+                    break;
+
+                case 1: // Run the cmd
+                    cmd_runCommand(job->msg);
+                    free(job->msg);
+                    break;                
+            }
         }
 
         free(job);
@@ -178,6 +201,7 @@ int chat_parseInput(struct com_QueueJob *job){
             return -1;
     }
     cmdJob->msg = cmd;
+    cmdJob->node = node;
     cmdJob->type = 1; // Run as a command
 
     return chat_insertQueue(cmdJob);
@@ -360,9 +384,34 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NIC
     return userNode;
 }
 
-// Delete a user from all occurences
+/*
+    The delete works by first setting the user point to NULL
+    meaning that the user is no longer valid and data cannot be
+    sent to it. A job is then sent to the queue to later
+    delete the node. This is done is that any left over jobs will
+    have an opportunity to find that the user isn't valid via NULL
+    and they can be cleared from the queue
+*/
 int chat_deleteUser(struct link_Node *userNode){
     struct chat_UserData *user = userNode->data;
+    int oldSock = user->socketInfo.socket;
+
+    if(userNode == NULL){
+        log_logMessage("Can't delete: node is NULL\n", TRACE);
+        return -1;
+    }
+
+    // Nothing new will be sent to queue
+    pthread_mutex_lock(&user->userMutex);
+    userNode->data = NULL;
+    pthread_mutex_unlock(&user->userMutex);
+
+    // Remove all pending messages
+    com_cleanQueue(userNode, oldSock);
+
+    // Remove socket
+    com_removeClient(user->socketInfo.socket);
+    user->socketInfo.socket = -2; // Ensure that no data sent to wrong user
 
     // Channels
     chat_removeUserFromAllChannels(userNode);
@@ -371,8 +420,7 @@ int chat_deleteUser(struct link_Node *userNode){
 
     // Main list
     pthread_mutex_lock(&serverLists.usersMutex);
-    int pos = link_indexOf(&serverLists.users, userNode);
-    link_remove(&serverLists.users, pos);
+    link_removeNode(&serverLists.users, userNode);
     pthread_mutex_unlock(&serverLists.usersMutex);
 
     // free() actual user

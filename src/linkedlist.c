@@ -34,16 +34,25 @@ struct link_Node *link_add(struct link_List *list, void *data){
 }
 
 void *link_remove(struct link_List *list, int pos){
-    if(!link_isEmpty(list)){
-            log_logMessage("List is empty: can't remove element", DEBUG);
-            return NULL;
-    }
-
     struct link_Node *node = link_getNode(list, pos);
     if(node == NULL){
             char buff[100];
             snprintf(buff, ARRAY_SIZE(buff), "Position %d does not exist", pos);
             log_logMessage(buff, DEBUG);
+            return NULL;
+    }
+
+    return link_removeNode(list, node);
+}
+
+void *link_removeNode(struct link_List *list, struct link_Node *node){
+    if(!link_isEmpty(list)){
+            log_logMessage("List is empty: can't remove element", DEBUG);
+            return NULL;
+    }
+
+    if(node == NULL){
+            log_logMessage("Node cannot be NULL", DEBUG);
             return NULL;
     }
     void *data = node->data;
@@ -58,17 +67,30 @@ void *link_remove(struct link_List *list, int pos){
     }
 
     //pointers of tail and head of list
-    if(pos == 0){
+    if(list->head == node){
             list->head = node->next;
     }
     
-    if(pos == list->size-1){
+    if(list->tail == node){
             list->tail = node->prev;	
     }
 
     free(node);
     list->size--;
     return data;
+
+}
+
+int link_containsNode(struct link_List *list, struct link_Node *node){
+    struct link_Node *n;
+
+    for(n = list->head; n != NULL; n = n->next){
+        if(node == n){
+            return 1;
+        }
+    }
+
+    return -1;
 }
 
 int link_indexOf(struct link_List *list, struct link_Node *target){

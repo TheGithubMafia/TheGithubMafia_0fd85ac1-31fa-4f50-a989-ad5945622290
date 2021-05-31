@@ -65,6 +65,9 @@ void com_close();
 // Will send a string to client inside node, also appends \r\n
 int com_sendStr(struct link_Node *node, char *msg);
 
+// Remove all user jobs from queue
+int com_cleanQueue(struct link_Node *userNode, int sock);
+
 // Insert selected node into the correct queue for processing
 int com_insertQueue(struct com_QueueJob *job);
 
@@ -73,13 +76,16 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 
 // Will determine if the specified socket fd is inside a pollfd struct
 // For use inside inside of a thread; Make sure to lock mutex if needed
-int com_hasSocket(int socket, struct pollfd *conns, int size);
+int com_hasSocket(int socket, struct com_ClientList *cliList);
 
 //Find first avaliable job in the queue that the thread can use
 int com_hasJob(struct com_DataQueue *dataQ, int sockfd);
 
 // Handle all incoming data from the client
 void *com_communicateWithClients(void *param);
+
+// Will close the client's socket
+int com_removeClient(int sock);
 
 // Place a new client into a pollfd struct
 int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads);
