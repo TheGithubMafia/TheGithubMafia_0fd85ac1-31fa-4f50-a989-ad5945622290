@@ -100,17 +100,6 @@ void *chat_processQueue(void *param){
             continue;
         }
 
-        if(job->type == 2) { // remove node
-            printf("dogma\n");
-            pthread_mutex_lock(&serverLists.usersMutex);
-            link_removeNode(&serverLists.users, job->node);
-            printf("dogma\n");
-            pthread_mutex_unlock(&serverLists.usersMutex);
-
-            free(job);
-            continue;
-        }
-
         if(job->node->data){ // Make sure user is valid
             switch (job->type) {
                 case 0: // Text to cmd
@@ -143,12 +132,10 @@ int chat_parseInput(struct com_QueueJob *job){
     }
     memset(cmd, 0, sizeof(struct chat_Message)); // Set all memory to 0
 
-    log_logMessage(job->str, MESSAGE);
-
     // Find where the message ends (\r or \n); if not supplied just take the very end of the buffer
     int length = 0;
     int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
-    for (int i = 0; i < ARRAY_SIZE(job->str); i++){
+    for (int i = 0; i < ARRAY_SIZE(job->str)-1; i++){
         if(job->str[i] == '\n' || job->str[i] == '\r'){
             length = i+1;
             job->str[i] = ' ';
@@ -160,6 +147,8 @@ int chat_parseInput(struct com_QueueJob *job){
 		job->str[i] = ' ';
 	}
     }
+
+    log_logMessage(job->str, MESSAGE);
 
     if(job->str[0] == ':'){
        loc = chat_findNextSpace(0, length, job->str);
