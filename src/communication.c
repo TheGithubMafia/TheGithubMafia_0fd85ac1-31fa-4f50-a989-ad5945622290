@@ -380,7 +380,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
         
         pthread_mutex_unlock(&clientList[least].clientListMutex);
 
-        chat_createUser(&addr, "Unregistered");
+        chat_createUser(&addr, "unreg");
 
         return least;
     }
@@ -482,8 +482,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 	int ret = getaddrinfo(NULL, port, &hints, &res);
 	if(ret != 0){
 		char msg[BUFSIZ];
-		strncpy(msg, "Error with getaddrinfo: ", ARRAY_SIZE(msg));
-		strncat(msg, gai_strerror(ret), ARRAY_SIZE(msg)-strlen(msg));
+		snprintf(msg, ARRAY_SIZE(msg), "getaddrinfo: %s", gai_strerror(ret));
 		log_logMessage(msg, ERROR);
 		return -1;
 	}
@@ -498,8 +497,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 		//successful
 		if(!bind(sock, rp->ai_addr, rp->ai_addrlen)){
 			char msg[BUFSIZ];
-			strncpy(msg, "Binded server to port ", ARRAY_SIZE(msg));
-			strncat(msg, port, 6);
+			snprintf(msg, ARRAY_SIZE(msg), "Binded server to port %s", port);
 			log_logMessage(msg, 2);
 			break; 
 		}

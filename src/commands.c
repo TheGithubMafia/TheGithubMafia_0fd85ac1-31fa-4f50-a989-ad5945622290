@@ -11,7 +11,7 @@ struct chat_Message cmd_unknownCommand;
 char *thisServer = "roundtable.example.com";
 
 // Common reply messages
-const char *invalidChanName = ":Invalid channel name: start with #";
+const char *invalidChanName = ":Invalid channel name";
 
 int init_commands() {
     // Initalize mutex to prevent locking issues
@@ -26,18 +26,18 @@ int init_commands() {
     chat_createMessage(&cmd_unknownCommand, NULL, thisServer, ERR_UNKNOWNCOMMAND, params, 1);
     cmd_unknownCommand.userNode = NULL;
 
-
-    cmd_addCommand("NICK", 1, &cmd_nick);
-    cmd_addCommand("PRIVMSG", 2, &cmd_privmsg);
-    cmd_addCommand("JOIN", 1, &cmd_join);
-    cmd_addCommand("NAMES", 1, &cmd_names);
-    cmd_addCommand("PART", 1, &cmd_part);
+	// Fill in command linked list
+    cmd_addCommand("NICK", 1, 0, &cmd_nick);
+    cmd_addCommand("PRIVMSG", 2, 1, &cmd_privmsg);
+    cmd_addCommand("JOIN", 1, 1, &cmd_join);
+    cmd_addCommand("NAMES", 1, 1, &cmd_names);
+    cmd_addCommand("PART", 1, 1, &cmd_part);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
 }
 
-int cmd_addCommand(char *word, int minParams, int (*func)(struct chat_Message *, struct chat_Message *)) {
+int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct chat_Message *, struct chat_Message *)) {
     struct cmd_Command *command = malloc(sizeof(struct cmd_Command));
     if(command == NULL){
         log_logError("Failed to allocate cmd_Command!", DEBUG);
@@ -47,6 +47,7 @@ int cmd_addCommand(char *word, int minParams, int (*func)(struct chat_Message *,
     command->minParams = minParams;
     strncpy(command->word, word, ARRAY_SIZE(command->word));	
     command->func = func;
+	command->permLevel = permLevel;
 
     pthread_mutex_lock(&cmd_commandList.commandMutex);
     link_add(&cmd_commandList.commands, command);
@@ -73,6 +74,12 @@ int cmd_runCommand(struct chat_Message *cmd){
             // Successful match
             pthread_mutex_unlock(&cmd_commandList.commandMutex);
             ret = -1; // Default to failure
+
+			if(chat_userIsRegistered(cmd->userNode) == -1 && command->permLevel >= 1){
+                char *params[] = {":You have not registered"};
+                chat_createMessage(&reply, cmd->userNode, thisServer, ERR_NOTREGISTERED, params, 1);
+                break;
+			}
 
             // Check number of params
             if(cmd->paramCount < command->minParams){
@@ -101,9 +108,6 @@ int cmd_runCommand(struct chat_Message *cmd){
 }
 
 // Changes a user's nickname
-const char *nick_usage = ":Usage: NICK <nickname>";
-const char *nick_success = ":Welcome to the server!";
-const char *nick_inUse = ":Nickname already in use!";
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
     struct chat_UserData *user;
@@ -114,7 +118,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     user = (struct chat_UserData *) node->data;
     // No nickname given
     if(cmd->params[0][0] == '\0'){
-        params[0] = (char *) nick_usage;
+		params[0] = ":Usage: NICK <nickname>";
         size = 1;
         chat_createMessage(reply, node, thisServer, ERR_NONICKNAMEGIVEN, params, size);
         return 1;
@@ -127,12 +131,12 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
         pthread_mutex_unlock(&user->userMutex);
 
         params[0] = cmd->params[0];
-        params[1] = (char *) nick_success;
+		params[1] = ":Welcome to the server!";
         strncpy(numeric, RPL_WELCOME, ARRAY_SIZE(numeric)-1);
         size = 2;
     } else { // Nickname in use
         params[0] = cmd->params[0];
-        params[1] = (char *) nick_inUse;
+		params[1] = "Nickname already in use!";
         strncpy(numeric, ERR_NICKNAMEINUSE, ARRAY_SIZE(numeric)-1);
         size = 2;
     }
@@ -143,22 +147,12 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 
 // Send a message to user or channel
 // TODO - add multiple receivers -> <receiver>{,<receiver>}
-const char *privmsg_usage = ":Usage: <receiver> <message>";
-const char *privmsg_userNotFound = ":Nick not found!";
-const char *privmsg_channelNotFound = ":Channel not found!";
-const char *privmsg_chanWritePerms = ":You do not have permission to send messages to this channel!";
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
     struct link_Node *otherUserNode;
     struct link_Node *channel;
     char *params[ARRAY_SIZE(cmd->params)];
     int size = 1;
-    
-    if(cmd->paramCount != 2){
-        params[0] = (char *) privmsg_usage;
-        chat_createMessage(reply, node, thisServer, ERR_NEEDMOREPARAMS, params, size);
-        return -1;
-    }
 
     // Sending to another user
     params[0] = cmd->params[0];
@@ -166,18 +160,18 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     if(cmd->params[0][0] != '#'){
         otherUserNode = chat_getUserByName(cmd->params[0]);
         if(otherUserNode == NULL){
-            params[1] = (char *) privmsg_userNotFound;
+			params[1] = ":Nick not found!";
             chat_createMessage(reply, node, thisServer, ERR_NOSUCHNICK, params, size);
             return -1;
         }
     } else { // To a channel
         channel = chat_getChannelByName(cmd->params[0]);
         if(channel == NULL){
-            params[1] = (char *) privmsg_channelNotFound;
+			params[1] = ":Channel not found!";
             chat_createMessage(reply, node, thisServer, ERR_NOSUCHCHANNEL, params, size);
             return -1;
         } else if (chat_isInChannel(channel, node) < 0){
-            params[1] = (char *) privmsg_chanWritePerms;
+			params[1] = ":You do not have permission to send mesesages to this channel!";
             chat_createMessage(reply, node, thisServer, ERR_CANNOTSENDTOCHAN, params, size);
            return -1; 
         }

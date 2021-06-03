@@ -14,20 +14,23 @@ struct cmd_CommandList {
     pthread_mutex_t commandMutex;
 };
 
-// The array of strings gives possible responses
-// index 0 = usage
+// permLevel describes the permissions needed for a user to run a command
+// 0 = Unregistered
+// 1 = Registered
+// 2 = Server Admin
 struct cmd_Command {
     char word[50];
     int minParams;
     char responses[5][50];
     int (*func)(struct chat_Message *, struct chat_Message *);
+	int permLevel;
 };
 
 int init_commands();
 
 // Will use parameters to construct a cmd_Command struct
 // and adds it to the cmd_commandList struct
-int cmd_addCommand(char *word, int minParams, int (*func)(struct chat_Message *, struct chat_Message *));
+int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct chat_Message *, struct chat_Message *));
 
 int cmd_runCommand(struct chat_Message *cmd);
 

@@ -341,17 +341,10 @@ struct link_Node *chat_getUserById(size_t id){
 }
 
 //Create a new user and return the node that it is in
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]){
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name){
     struct chat_UserData *user;
 
     pthread_mutex_lock(&serverLists.usersMutex);
-    //Plan to remove this maxUser check because it should be only
-    //for connected users
-    if(serverLists.users.size >= serverLists.max){
-            log_logMessage("Server is full", WARNING);
-            pthread_mutex_unlock(&serverLists.usersMutex);	
-            return NULL;
-    }
 
     user = malloc(sizeof(struct chat_UserData));
     if(user == NULL){
@@ -416,6 +409,17 @@ int chat_deleteUser(struct link_Node *userNode){
     free(user);
 
     return 1;
+}
+
+int chat_userIsRegistered(struct link_Node *userNode){
+	char buff[NICKNAME_LENGTH];
+	chat_getNameByNode(buff, userNode);
+
+	if(strncmp(buff, UNREGISTERED_NAME, strlen(UNREGISTERED_NAME)) == 0){
+		return -1;
+	}
+
+	return 1;
 }
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode){
@@ -585,15 +589,22 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
 // Send a message to every user in a channel
 // user list is a list of nodes to user (LIST->node (from main list)->user)
 int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode){
-    struct link_Node *node;
+    struct link_Node *node, *origin = cmd->userNode;
     struct chat_Channel *channel = channelNode->data;
 
     pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL; node = node->next){
         cmd->userNode = node->data;
+
+		if(cmd->userNode == origin){ // Dont send to sender
+			continue;
+		}
+
         chat_sendMessage(cmd);
     }
     pthread_mutex_unlock(&channel->channelMutex);
+
+	cmd->userNode = origin;
 
     return 1;
 }

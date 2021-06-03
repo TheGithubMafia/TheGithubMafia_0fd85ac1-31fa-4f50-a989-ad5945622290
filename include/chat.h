@@ -12,6 +12,7 @@
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 #define NICKNAME_LENGTH 9
 #define CHANNEL_NAME_LENGTH 201
+#define UNREGISTERED_NAME "unreg"
 
 /*  Note about the structure of the users
     All new users are added to the main linked
@@ -26,8 +27,8 @@ struct chat_ServerLists {
 	pthread_mutex_t usersMutex;
 	struct link_List groups;	
 	pthread_mutex_t groupsMutex;
-        struct link_List channels;
-        pthread_mutex_t channelsMutex;
+	struct link_List channels;
+	pthread_mutex_t channelsMutex;
 };
 
 // Data about an user
@@ -37,6 +38,7 @@ struct chat_ServerLists {
 // except with socketInfo.socket must equal -1
 struct chat_UserData {
 	size_t id;
+	int admin;
 	struct com_SocketInfo socketInfo;	
 	char nickname[NICKNAME_LENGTH + 1];
 	pthread_mutex_t userMutex;
@@ -119,10 +121,12 @@ struct link_Node *chat_getUserById(size_t id);
 struct link_Node *chat_getUserBySocket(int sock);
 
 // Returns the node to a new user, also automatically adds the user to the main list
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char name[NICKNAME_LENGTH]);
+struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
 
 // Remove a user from the server
 int chat_deleteUser(struct link_Node *userNode);
+
+int chat_userIsRegistered(struct link_Node *userNode);
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode);
 

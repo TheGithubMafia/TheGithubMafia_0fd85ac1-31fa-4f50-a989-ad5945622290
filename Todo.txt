@@ -1,14 +1,11 @@
-1. Logging - DONE
-2. Config - DONE for now
-3. Socket connections
-4. handle communication
-	4.1 secure communication
-	4.2 heartbeat from connections
-    4.3 create user upon connection 
-5. Chat - check all functions for bugs
-    5.1 - Review all functions 
-6. Channels
-
+1. Config - DONE for now
+2. Socket connections
+3. handle communication
+	3.1 secure communication
+	3.2 heartbeat from connections
+    3.3 create user upon connection 
+4. Chat - check all functions for bugs
+    4.1 - Review all functions 
+5. Try to reduce memory footprint of chat_Message
 
 ** Fix the standard string in logging.c and use BUFSIZ and ARRAY_SIZE() **
-*** Figure out stack smashing when repeated inputs of ^C are sent thru telnet
