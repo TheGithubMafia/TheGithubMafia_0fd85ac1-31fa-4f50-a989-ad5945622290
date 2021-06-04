@@ -220,22 +220,25 @@ int chat_sendMessage(struct chat_Message *msg) {
 }
 
 int chat_sendServerMessage(struct chat_Message *cmd){
-    struct chat_UserData *user, *origin = cmd->user;
+    struct chat_UserData *user;
+    char str[BUFSIZ];
+    chat_messageToString(cmd, str, ARRAY_SIZE(str));
 
     for(int i = 0; i < serverLists.max; i++){
         user = &serverLists.users[i];
-		cmd->user = user;
-		pthread_mutex_lock(&user->userMutex);
 
-		if(cmd->user == origin){ // Dont send to sender
+		pthread_mutex_lock(&user->userMutex);
+		int id = user->id;
+		pthread_mutex_unlock(&user->userMutex);
+
+		if(user == cmd->user){ // Dont send to sender
 			continue;
 		}
 
-		pthread_mutex_unlock(&user->userMutex);
-        chat_sendMessage(cmd);
+		if(id != -1){
+			com_sendStr(user, str);
+		}
     }
-
-	cmd->user = origin;
 
     return 1;
 }
