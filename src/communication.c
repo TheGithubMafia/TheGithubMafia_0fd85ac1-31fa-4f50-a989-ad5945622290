@@ -44,7 +44,6 @@ int init_server(){
         fig_Configuration.clients = 20;
         log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
     }
-    chat_setMaxUsers(fig_Configuration.clients);
 
     // Allocate memory based on size from configuration
     clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
@@ -77,9 +76,9 @@ void com_close(){
 }
 
 // Make a new job and insert it into the queue for sending
-int com_sendStr(struct link_Node *node, char *msg){
+int com_sendStr(struct chat_UserData *user, char *msg){
     struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
-    job->node = node;
+    job->user = user;
 
     snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
     com_insertQueue(job);
@@ -88,7 +87,7 @@ int com_sendStr(struct link_Node *node, char *msg){
 }
 
 // Will remove all instances of a user from the queue
-int com_cleanQueue(struct link_Node *userNode, int sock){
+int com_cleanQueue(struct chat_UserData *user, int sock){
     struct com_ClientList *cliList;
     struct link_Node *node;
     struct com_QueueJob *job;
@@ -102,12 +101,12 @@ int com_cleanQueue(struct link_Node *userNode, int sock){
             pthread_mutex_lock(&cliList->jobs.queueMutex); 
 
             int notFinished = 1;
-            while(notFinished){ // Restart search: item removed->list changes
+            while(notFinished){ // Restart search: item removed = list changes
                 int pos = 0;
                 notFinished = 0;
                 for(node = cliList->jobs.queue.head; node != NULL; node = node->next){
                     job = node->data;
-                    if(job->node == userNode){
+                    if(job->user == user){
                         free(link_remove(&cliList->jobs.queue, pos));
                         notFinished = 1;
                         break;
@@ -130,15 +129,9 @@ int com_cleanQueue(struct link_Node *userNode, int sock){
 
 int com_insertQueue(struct com_QueueJob *job){
     struct com_ClientList *cliList = NULL;
-    struct link_Node *node = job->node;
-    struct chat_UserData *user = (struct chat_UserData *) node->data;
-    int nodeIsValid = -1;
+    struct chat_UserData *user = job->user;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
-    nodeIsValid = link_containsNode(&serverLists.users, node);
-    pthread_mutex_unlock(&serverLists.usersMutex);
-
-    if(nodeIsValid == -1 || !node->data){ // User is disconnecting; nothing new to be sent
+    if(user->id == -1 || !user){ // User is disconnecting; nothing new to be sent
         log_logMessage("User no longer valid", TRACE);
         return -1; 
     }
@@ -219,7 +212,7 @@ int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
     pthread_mutex_lock(&dataQ->queueMutex); 
 
     for(node = dataQ->queue.head; node != NULL; node = node->next){
-        user = ((struct com_QueueJob *) node->data)->node->data;
+        user = ((struct com_QueueJob *) node->data)->user;
 
         if(user->socketInfo.socket == sockfd){
             pthread_mutex_unlock(&dataQ->queueMutex); 
@@ -249,7 +242,6 @@ void *com_communicateWithClients(void *param){
     }
 
     struct chat_UserData *user;
-    struct link_Node *node;
     while(1){
         pthread_mutex_lock(&clientList->clientListMutex);
 
@@ -271,14 +263,13 @@ void *com_communicateWithClients(void *param){
                     clientList->connected--;
 
                 } else if (clientList->clients[i].revents & POLLIN){
-                    // Really think about what to do if socket is not yet a user
-                    node = chat_getUserBySocket(sockfd);
+                    user = chat_getUserBySocket(sockfd);
                     job = malloc(sizeof(struct com_QueueJob));
                     if(job == NULL){
                             log_logError("Error creating job", DEBUG);
                             continue;
                     }
-                    job->node = node;
+                    job->user = user;
                     job->type = 0; // Use string
 
                     int bytes = read(sockfd, job->str, ARRAY_SIZE(job->str));
@@ -292,7 +283,7 @@ void *com_communicateWithClients(void *param){
                         }
 
                         pthread_mutex_unlock(&clientList->clientListMutex);
-                        chat_deleteUser(node);
+                        chat_deleteUser(user);
                         pthread_mutex_lock(&clientList->clientListMutex);
                     } else {
                         chat_insertQueue(job);
@@ -304,10 +295,10 @@ void *com_communicateWithClients(void *param){
                     if(jobLoc >= 0){
                         pthread_mutex_lock(&clientList->jobs.queueMutex); 
                         job = link_remove(&clientList->jobs.queue, jobLoc);
-                        user = job->node->data;
+                        user = job->user;
                         pthread_mutex_unlock(&clientList->jobs.queueMutex); 
 
-                        if(node != NULL && user != NULL){
+                        if(user != NULL){
                             write(user->socketInfo.socket, job->str, strlen(job->str));
                         }
                         free(job);

@@ -13,16 +13,14 @@ size_t chat_globalUserID = 0;
 
 struct chat_DataQueue dataQueue;
 
-void chat_setMaxUsers(int max){
-	serverLists.max = max;
-}
-
 int init_chat(){
     //Check that the config data is correct
     if(fig_Configuration.threadsDATA < 1){
             fig_Configuration.threadsDATA = 1;
             log_logMessage("Must have at least 1 data thread! Using 1 data thread", WARNING);
     }	
+
+	serverLists.max = fig_Configuration.clients;
 
     // Allocate threads for processing user input 
     dataQueue.threads = calloc(fig_Configuration.threadsDATA, sizeof(pthread_t)); 
@@ -38,11 +36,24 @@ int init_chat(){
         return -1;
     }
 
+	// Allocate users array
+	serverLists.users = calloc(fig_Configuration.clients, sizeof(struct chat_UserData));
+	if(serverLists.users == NULL){
+        log_logError("Error initalizing users list", ERROR);
+        return -1;
+	}
+
+	// Set id of all users to -1
+	for (int i = 0; i < serverLists.max; i++){
+		serverLists.users[i].id = -1;
+	}
+
     return chat_setupDataThreads(&fig_Configuration); 
 }
 
 void chat_close(){
     free(dataQueue.threads);
+	free(serverLists.users);
 }
 
 int chat_setupDataThreads(struct fig_ConfigData *config){
@@ -94,13 +105,13 @@ void *chat_processQueue(void *param){
             continue;
         }
 
-        if(!job->node){
-            log_logMessage("Job node is NULL", DEBUG);
+        if(!job->user){
+            log_logMessage("Job user is NULL", DEBUG);
             free(job);
             continue;
         }
 
-        if(job->node->data){ // Make sure user is valid
+        if(job->user->id >= 0){ // Make sure user is valid
             switch (job->type) {
                 case 0: // Text to cmd
                     chat_parseInput(job); 
@@ -122,7 +133,7 @@ void *chat_processQueue(void *param){
 // TODO - Support multiple cmds in one read
 // TODO - Handle null bytes? also handle MAJOR issues with memcpy (size of copied)
 int chat_parseInput(struct com_QueueJob *job){
-    struct link_Node *node = job->node;
+    struct chat_UserData *user = job->user;
     struct chat_Message *cmd = malloc(sizeof(struct chat_Message));
     struct com_QueueJob *cmdJob;
 
@@ -142,10 +153,10 @@ int chat_parseInput(struct com_QueueJob *job){
             break;
         }
 
-	// Remove any non-printable characters
-	if(iscntrl(job->str[i]) == 1){
-		job->str[i] = ' ';
-	}
+		// Remove any non-printable characters
+		if(iscntrl(job->str[i]) == 1){
+			job->str[i] = ' ';
+		}
     }
 
     log_logMessage(job->str, MESSAGE);
@@ -180,7 +191,7 @@ int chat_parseInput(struct com_QueueJob *job){
        }
     }
 
-    cmd->userNode = node;
+    cmd->user = user;
 
     // Create job to execute command
     cmdJob = malloc(sizeof(struct com_QueueJob));
@@ -190,7 +201,7 @@ int chat_parseInput(struct com_QueueJob *job){
             return -1;
     }
     cmdJob->msg = cmd;
-    cmdJob->node = node;
+    cmdJob->user = user;
     cmdJob->type = 1; // Run as a command
 
     return chat_insertQueue(cmdJob);
@@ -203,33 +214,34 @@ int chat_sendMessage(struct chat_Message *msg) {
 
     char str[BUFSIZ];
     chat_messageToString(msg, str, ARRAY_SIZE(str));
-    com_sendStr(msg->userNode, str);
+    com_sendStr(msg->user, str);
 
     return 1;
 }
 
 int chat_sendServerMessage(struct chat_Message *cmd){
-    struct link_Node *node, *origin = cmd->userNode;
+    struct chat_UserData *user, *origin = cmd->user;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
-    for(node = serverLists.users.head; node != NULL; node = node->next){
-        cmd->userNode = node->data;
+    for(int i = 0; i < serverLists.max; i++){
+        user = &serverLists.users[i];
+		cmd->user = user;
+		pthread_mutex_lock(&user->userMutex);
 
-		if(cmd->userNode == origin){ // Dont send to sender
+		if(cmd->user == origin){ // Dont send to sender
 			continue;
 		}
 
+		pthread_mutex_unlock(&user->userMutex);
         chat_sendMessage(cmd);
     }
-    pthread_mutex_unlock(&serverLists.usersMutex);
 
-	cmd->userNode = origin;
+	cmd->user = origin;
 
     return 1;
 }
 
-int chat_createMessage(struct chat_Message *msg, struct link_Node *user, char *prefix, char *cmd, char **params, int paramCount) {
-    msg->userNode = user;
+int chat_createMessage(struct chat_Message *msg, struct chat_UserData *user, char *prefix, char *cmd, char **params, int paramCount) {
+    msg->user = user;
 
     if(prefix != NULL){ // Automatically insert a ':' infront
         msg->prefix[0] = ':';
@@ -270,11 +282,8 @@ int chat_findNextSpace(int starting, int size, char *str){
     return -1;
 }
 
-// Fill in a struct with a user's node
-int chat_getNameByNode(char buff[NICKNAME_LENGTH], struct link_Node *node){
-    struct chat_UserData *user;
-    user = (struct chat_UserData *) node->data;
-    if(node == NULL || user == NULL){
+int chat_getNickname(char buff[NICKNAME_LENGTH], struct chat_UserData *user){
+    if(user == NULL || user->id < 0){
         return -1;
     }
 
@@ -285,93 +294,83 @@ int chat_getNameByNode(char buff[NICKNAME_LENGTH], struct link_Node *node){
     return 1;
 }
 
-//Same as other but uses name to find answer
-struct link_Node *chat_getUserByName(char name[NICKNAME_LENGTH]){
-    struct link_Node *node;
+struct chat_UserData *chat_getUserByName(char name[NICKNAME_LENGTH]){
     struct chat_UserData *user;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
-
-    for(node = serverLists.users.head; node != NULL; node = node->next){
-            user = node->data;
+    for(int i = 0; i < serverLists.max; i++){
+            user = &serverLists.users[i];
             pthread_mutex_lock(&user->userMutex);
 
             if(!strncmp(user->nickname, name, NICKNAME_LENGTH)){
                     pthread_mutex_unlock(&user->userMutex);
-                    pthread_mutex_unlock(&serverLists.usersMutex);
-                    return node;
+                    return user;
             }
 
             pthread_mutex_unlock(&user->userMutex);
     }
 
-    pthread_mutex_unlock(&serverLists.usersMutex);
-
     return NULL;
 }
 
-//Find the user in the serverLists list using the user id
-struct link_Node *chat_getUserBySocket(int sock){
-    struct link_Node *node;
+struct chat_UserData *chat_getUserBySocket(int sock){
     struct chat_UserData *user;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
-
-    for(node = serverLists.users.head; node != NULL; node = node->next){
-            user = node->data;
+    for(int i = 0; i < serverLists.max; i++){
+            user = &serverLists.users[i];
             pthread_mutex_lock(&user->userMutex);
 
             if(user->socketInfo.socket == sock){
                     pthread_mutex_unlock(&user->userMutex);
-                    pthread_mutex_unlock(&serverLists.usersMutex);
-                    return node;
+                    return user;
             }
 
             pthread_mutex_unlock(&user->userMutex);
     }
 
-    pthread_mutex_unlock(&serverLists.usersMutex);
-
     return NULL;
 }
 
-//Find the user in the serverLists list using the user id
-struct link_Node *chat_getUserById(size_t id){
-    struct link_Node *node;
+struct chat_UserData *chat_getUserById(int id){
     struct chat_UserData *user;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
-
-    for(node = serverLists.users.head; node != NULL; node = node->next){
-            user = node->data;
+    for(int i = 0; i < serverLists.max; i++){
+            user = &serverLists.users[i];
             pthread_mutex_lock(&user->userMutex);
 
             if(user->id == id){
                     pthread_mutex_unlock(&user->userMutex);
-                    pthread_mutex_unlock(&serverLists.usersMutex);
-                    return node;
+                    return user;
             }
 
             pthread_mutex_unlock(&user->userMutex);
     }
 
-    pthread_mutex_unlock(&serverLists.usersMutex);
-
     return NULL;
 }
 
-//Create a new user and return the node that it is in
-struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name){
+//Create a new user and return it
+struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *name){
     struct chat_UserData *user;
+	int success = -1;
 
-    pthread_mutex_lock(&serverLists.usersMutex);
+	// Find an empty spot
+    for(int i = 0; i < serverLists.max; i++){
+            user = &serverLists.users[i];
+            pthread_mutex_lock(&user->userMutex);
 
-    user = malloc(sizeof(struct chat_UserData));
-    if(user == NULL){
-            log_logError("Error adding user", ERROR);
-            pthread_mutex_unlock(&serverLists.usersMutex);	
-            return NULL;
+			if(user->id < 0){
+				success = 1;
+				break;
+			}
+
+            pthread_mutex_unlock(&user->userMutex);
     }
+
+	if(success == -1) { // Failed to find a spot
+		log_logMessage("No spots avaliable for new user", ERROR);
+		return NULL;
+	}
+
     //Set user's data
     memset(user, 0, sizeof(struct chat_UserData));
     //eventually get this id from saved user data
@@ -379,61 +378,33 @@ struct link_Node *chat_createUser(struct com_SocketInfo *sockInfo, char *name){
     strncpy(user->nickname, name, NICKNAME_LENGTH);
     memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 
-    struct link_Node *userNode = link_add(&serverLists.users, user);
-
-    pthread_mutex_unlock(&serverLists.usersMutex);	
-
-    return userNode;
+    return user;
 }
 
-/*
-    The delete works by first setting the user point to NULL
-    meaning that the user is no longer valid and data cannot be
-    sent to it. A job is then sent to the queue to later
-    delete the node. This is done is that any left over jobs will
-    have an opportunity to find that the user isn't valid via NULL
-    and they can be cleared from the queue
-*/
-int chat_deleteUser(struct link_Node *userNode){
-    struct chat_UserData *user = userNode->data;
-    int oldSock = user->socketInfo.socket;
-
-    if(userNode == NULL){
-        log_logMessage("Can't delete: node is NULL\n", TRACE);
-        return -1;
-    }
-
+int chat_deleteUser(struct chat_UserData *user){
     // Nothing new will be sent to queue
     pthread_mutex_lock(&user->userMutex);
-    userNode->data = NULL;
+    user->id = -1; // -1 means invalid user
     pthread_mutex_unlock(&user->userMutex);
 
     // Remove all pending messages
-    com_cleanQueue(userNode, oldSock);
+    com_cleanQueue(user, user->socketInfo.socket);
 
     // Remove socket
     com_removeClient(user->socketInfo.socket);
     user->socketInfo.socket = -2; // Ensure that no data sent to wrong user
 
     // Channels
-    chat_removeUserFromAllChannels(userNode);
+    chat_removeUserFromAllChannels(user);
 
     // Groups
-
-    // Main list
-    pthread_mutex_lock(&serverLists.usersMutex);
-    link_removeNode(&serverLists.users, userNode);
-    pthread_mutex_unlock(&serverLists.usersMutex);
-
-    // free() actual user
-    free(user);
 
     return 1;
 }
 
-int chat_userIsRegistered(struct link_Node *userNode){
+int chat_userIsRegistered(struct chat_UserData *user){
 	char buff[NICKNAME_LENGTH];
-	chat_getNameByNode(buff, userNode);
+	chat_getNickname(buff, user);
 
 	if(strncmp(buff, UNREGISTERED_NAME, NICKNAME_LENGTH) == 0){
 		return -1;
@@ -442,13 +413,13 @@ int chat_userIsRegistered(struct link_Node *userNode){
 	return 1;
 }
 
-int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *userNode){
+int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct link_Node *node;
     struct chat_Channel *channel = channelNode->data;
     int ret = -1;
     int pos = 0;
 
-    if(channel == NULL || userNode == NULL){
+    if(channel == NULL){
         log_logMessage("Cannot remove user from channel", DEBUG);
         return -1;
     }
@@ -456,7 +427,7 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *
     pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL; node = node->next){
         if(node != NULL && node->data != NULL){
-            if(userNode == node->data){
+            if(user == node->data){
                 // Match
                 link_remove(&channel->users, pos);
                 ret = 1;
@@ -471,17 +442,14 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct link_Node *
     return ret;
 }
 
-int chat_removeUserFromAllChannels(struct link_Node *userNode){
+int chat_removeUserFromAllChannels(struct chat_UserData *user){
     struct link_Node *node;
     int ret = -1;
 
     pthread_mutex_lock(&serverLists.channelsMutex);
 
     for(node = serverLists.channels.head; node != NULL; node = node->next){
-            // Unlock main list while processing
-            pthread_mutex_unlock(&serverLists.channelsMutex);
-            int num = chat_removeUserFromChannel(node, userNode);
-            pthread_mutex_lock(&serverLists.channelsMutex);
+            int num = chat_removeUserFromChannel(node, user);
 
             ret = ret == -1 ? num : ret;
     }
@@ -552,28 +520,29 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
 }
 
 // Check if a user is in a channel
-int chat_isInChannel(struct link_Node *channelNode, struct link_Node *userNode){
+int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct chat_Channel *channel = channelNode->data;
 
     pthread_mutex_lock(&channel->channelMutex);
+	int ret = -1;
     for(struct link_Node *n = channel->users.head; n != NULL; n = n->next){
-        if(n->data == userNode){
-            pthread_mutex_unlock(&channel->channelMutex);
-            return 1;
+        if(n->data == user){
+            ret = 1;
+			break;
         }
     }
     pthread_mutex_unlock(&channel->channelMutex);
 
-    return -1;
+    return ret;
 }
 
-// Add a user to a channel from their node on the main user list
-struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct link_Node *userNode){
+// Add a user to a channel
+struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct chat_Channel *channel = channelNode->data;
 
-    if(chat_isInChannel(channelNode, userNode) < 0){
+    if(chat_isInChannel(channelNode, user) < 0){
         pthread_mutex_lock(&channel->channelMutex);
-        struct link_Node *ret = link_add(&channel->users, userNode);
+        struct link_Node *ret = link_add(&channel->users, user);
         pthread_mutex_unlock(&channel->channelMutex);
         
         return ret;
@@ -592,7 +561,7 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     buff[0] = ':';
     pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL && pos < size; node = node->next){
-        chat_getNameByNode(nickname, node->data);
+        chat_getNickname(nickname, node->data);
         strncat(buff, nickname, size - pos - 1);
         pos = strlen(buff);
 
@@ -607,16 +576,16 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
 }
 
 // Send a message to every user in a channel
-// user list is a list of nodes to user (LIST->node (from main list)->user)
 int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode){
-    struct link_Node *node, *origin = cmd->userNode;
+    struct link_Node *node;
+	struct chat_UserData *origin = cmd->user;
     struct chat_Channel *channel = channelNode->data;
 
     pthread_mutex_lock(&channel->channelMutex);
     for(node = channel->users.head; node != NULL; node = node->next){
-        cmd->userNode = node->data;
+        cmd->user = node->data;
 
-		if(cmd->userNode == origin){ // Dont send to sender
+		if(cmd->user == origin){ // Dont send to sender
 			continue;
 		}
 
@@ -624,7 +593,7 @@ int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelN
     }
     pthread_mutex_unlock(&channel->channelMutex);
 
-	cmd->userNode = origin;
+	cmd->user = origin;
 
     return 1;
 }
