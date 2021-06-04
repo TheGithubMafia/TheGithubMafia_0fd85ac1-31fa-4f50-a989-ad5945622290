@@ -76,7 +76,7 @@ int cmd_runCommand(struct chat_Message *cmd){
             ret = -1; // Default to failure
 
 			if(chat_userIsRegistered(cmd->userNode) == -1 && command->permLevel >= 1){
-                char *params[] = {":You have not registered"};
+                char *params[] = {":You have not registered: use NICK first"};
                 chat_createMessage(&reply, cmd->userNode, thisServer, ERR_NOTREGISTERED, params, 1);
                 break;
 			}
@@ -108,41 +108,52 @@ int cmd_runCommand(struct chat_Message *cmd){
 }
 
 // Changes a user's nickname
+const char *nick_usage = ":Usage: NICK <nickname>";
+const char *nick_welcome = ":Welcome to the server!";
+const char *nick_inUse = "Nickname already in use!";
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     struct link_Node *node = cmd->userNode;
     struct chat_UserData *user;
     char *params[ARRAY_SIZE(cmd->params)];
-    char numeric[NUMERIC_SIZE];
-    int size = 0;
 
     user = (struct chat_UserData *) node->data;
     // No nickname given
     if(cmd->params[0][0] == '\0'){
-		params[0] = ":Usage: NICK <nickname>";
-        size = 1;
-        chat_createMessage(reply, node, thisServer, ERR_NONICKNAMEGIVEN, params, size);
+		params[0] = (char *) nick_usage;
+        chat_createMessage(reply, node, thisServer, ERR_NONICKNAMEGIVEN, params, 1);
         return 1;
     }
 
     struct link_Node *otherUserNode = chat_getUserByName(cmd->params[0]);
     if(otherUserNode == NULL) { // No other user has this name
+		char oldName[NICKNAME_LENGTH];
+		chat_getNameByNode(oldName, node);
+		int isReg = chat_userIsRegistered(node);
+
+		// Set the name in the user's buffer
         pthread_mutex_lock(&user->userMutex);
         strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
         pthread_mutex_unlock(&user->userMutex);
 
         params[0] = cmd->params[0];
-		params[1] = ":Welcome to the server!";
-        strncpy(numeric, RPL_WELCOME, ARRAY_SIZE(numeric)-1);
-        size = 2;
-    } else { // Nickname in use
-        params[0] = cmd->params[0];
-		params[1] = "Nickname already in use!";
-        strncpy(numeric, ERR_NICKNAMEINUSE, ARRAY_SIZE(numeric)-1);
-        size = 2;
+		// User is already registered
+		if(isReg == 1){
+			chat_createMessage(reply, node, oldName, "NICK", params, 1);
+			chat_sendServerMessage(reply);
+			return 1;
+		}
+
+		params[1] = (char *) nick_welcome;
+		chat_createMessage(reply, node, thisServer, RPL_WELCOME, params, 2);
+		return 1;
+
     }
 
-    chat_createMessage(reply, node, thisServer, numeric, params, size);
-    return 1;
+	params[0] = cmd->params[0];
+	params[1] = (char *) nick_inUse;
+
+	chat_createMessage(reply, node, thisServer, ERR_NICKNAMEINUSE, params, 2);
+	return 1;
 }
 
 // Send a message to user or channel

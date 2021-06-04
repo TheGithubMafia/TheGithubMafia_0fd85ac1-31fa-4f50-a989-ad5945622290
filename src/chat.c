@@ -208,6 +208,26 @@ int chat_sendMessage(struct chat_Message *msg) {
     return 1;
 }
 
+int chat_sendServerMessage(struct chat_Message *cmd){
+    struct link_Node *node, *origin = cmd->userNode;
+
+    pthread_mutex_lock(&serverLists.usersMutex);
+    for(node = serverLists.users.head; node != NULL; node = node->next){
+        cmd->userNode = node->data;
+
+		if(cmd->userNode == origin){ // Dont send to sender
+			continue;
+		}
+
+        chat_sendMessage(cmd);
+    }
+    pthread_mutex_unlock(&serverLists.usersMutex);
+
+	cmd->userNode = origin;
+
+    return 1;
+}
+
 int chat_createMessage(struct chat_Message *msg, struct link_Node *user, char *prefix, char *cmd, char **params, int paramCount) {
     msg->userNode = user;
 
@@ -415,7 +435,7 @@ int chat_userIsRegistered(struct link_Node *userNode){
 	char buff[NICKNAME_LENGTH];
 	chat_getNameByNode(buff, userNode);
 
-	if(strncmp(buff, UNREGISTERED_NAME, strlen(UNREGISTERED_NAME)) == 0){
+	if(strncmp(buff, UNREGISTERED_NAME, NICKNAME_LENGTH) == 0){
 		return -1;
 	}
 

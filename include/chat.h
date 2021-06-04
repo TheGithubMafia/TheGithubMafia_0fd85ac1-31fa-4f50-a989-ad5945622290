@@ -99,6 +99,9 @@ int chat_parseInput(struct com_QueueJob *job);
 // Will send a Message struct to specified node
 int chat_sendMessage(struct chat_Message *msg);
 
+// Sends a message to every connected user
+int chat_sendServerMessage(struct chat_Message *cmd);
+
 // Fills in a Message struct
 int chat_createMessage(struct chat_Message *msg, struct link_Node *user, char *prefix, char *cmd, char **params, int paramCount);
 
