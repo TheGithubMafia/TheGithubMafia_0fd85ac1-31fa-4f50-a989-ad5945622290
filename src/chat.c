@@ -420,7 +420,6 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserDa
     struct link_Node *node;
     struct chat_Channel *channel = channelNode->data;
     int ret = -1;
-    int pos = 0;
 
     if(channel == NULL){
         log_logMessage("Cannot remove user from channel", DEBUG);
@@ -432,13 +431,11 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserDa
         if(node != NULL && node->data != NULL){
             if(user == node->data){
                 // Match
-                link_remove(&channel->users, pos);
+                link_removeNode(&channel->users, node);
                 ret = 1;
                 break;
             }
         }
-
-        pos++;
     }
     pthread_mutex_unlock(&channel->channelMutex);
     

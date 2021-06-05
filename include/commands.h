@@ -8,6 +8,7 @@
 #define NUMERIC_SIZE 15
 
 struct chat_Message;
+struct chat_Channel;
 
 struct cmd_CommandList {
     struct link_List commands;	
@@ -33,6 +34,9 @@ int init_commands();
 int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct chat_Message *, struct chat_Message *));
 
 int cmd_runCommand(struct chat_Message *cmd);
+
+/* Reply generators */
+void rpl_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user);
 
 // Change a user's nickname
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);

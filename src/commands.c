@@ -101,6 +101,14 @@ int cmd_runCommand(struct chat_Message *cmd){
     return ret;
 }
 
+// Generate a ERR_NOTONCHANNEL reply
+void rpl_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
+		char *params[] = {chan->name, ":You are not in this channel!"};
+		pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+        chat_createMessage(msg, user, thisServer, ERR_NOTONCHANNEL, params, 2);
+		pthread_mutex_unlock(&chan->channelMutex);
+}
+
 // Changes a user's nickname
 const char *nick_usage = ":Usage: NICK <nickname>";
 const char *nick_welcome = ":Welcome to the server!";
@@ -296,12 +304,6 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     struct chat_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
     int size = 1;
-    
-    if(cmd->paramCount != 1){
-        params[0] = (char *) join_usage;
-        chat_createMessage(reply, user, thisServer, ERR_NEEDMOREPARAMS, params, size);
-        return -1;
-    }
 
     struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
     if(cmd->params[0][0] != '#' || channel == NULL){
@@ -310,7 +312,10 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
         return -1;
     }
 
-    chat_removeUserFromChannel(channel, user); // Check for error
+    if(chat_removeUserFromChannel(channel, user) < 0) { // Not in the channel
+		rpl_notonchannel(reply, channel->data, user);
+		return 1;
+	}
 
     // Success
     char nickname[NICKNAME_LENGTH];
