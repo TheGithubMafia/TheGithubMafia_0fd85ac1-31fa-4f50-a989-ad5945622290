@@ -4,6 +4,7 @@
 // Standard replies
 #define RPL_WELCOME "001"
 #define RPL_NAMREPLY "353"
+#define RPL_ENDOFNAMES "366"
 
 // Errors
 #define ERR_UNKNOWNERROR "400"

@@ -102,10 +102,18 @@ int cmd_runCommand(struct chat_Message *cmd){
 }
 
 // Generate a ERR_NOTONCHANNEL reply
-void rpl_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
+void err_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
 		char *params[] = {chan->name, ":You are not in this channel!"};
 		pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
         chat_createMessage(msg, user, thisServer, ERR_NOTONCHANNEL, params, 2);
+		pthread_mutex_unlock(&chan->channelMutex);
+}
+
+// Generate a RPL_ENDOFNAMES reply
+void rpl_endofnames(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
+		char *params[] = {chan->name, ":End of /NAMES list"};
+		pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+        chat_createMessage(msg, user, thisServer, RPL_ENDOFNAMES, params, 2);
 		pthread_mutex_unlock(&chan->channelMutex);
 }
 
@@ -268,18 +276,11 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     struct chat_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
-    int size = 1;
     
-    if(cmd->paramCount != 1){
-        params[0] = ":Usage: NAMES <channel>";
-        chat_createMessage(reply, user, thisServer, ERR_NEEDMOREPARAMS, params, size);
-        return -1;
-    }
-
     struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
     if(channel == NULL){
         params[0] = (char *) invalidChanName;
-        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, size);
+        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
         return -1;
     }
 
@@ -292,9 +293,11 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     params[1] = "=";
     params[2] = cmd->params[0];
     params[3] = names;
-    size = 4;
 
-    chat_createMessage(reply, user, thisServer, RPL_NAMREPLY, params, size);
+    chat_createMessage(reply, user, thisServer, RPL_NAMREPLY, params, 4);
+	chat_sendMessage(reply);
+
+	rpl_endofnames(reply, channel->data, user);
     return 1;
 }
 
@@ -313,7 +316,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
     if(chat_removeUserFromChannel(channel, user) < 0) { // Not in the channel
-		rpl_notonchannel(reply, channel->data, user);
+		err_notonchannel(reply, channel->data, user);
 		return 1;
 	}
 
