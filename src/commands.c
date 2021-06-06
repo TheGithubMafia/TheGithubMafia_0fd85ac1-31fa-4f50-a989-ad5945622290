@@ -69,7 +69,7 @@ int cmd_runCommand(struct chat_Message *cmd){
             pthread_mutex_unlock(&cmd_commandList.commandMutex);
             ret = -1; // Default to failure
 
-			if(chat_userIsRegistered(cmd->user) == -1 && command->permLevel >= 1){
+			if(chat_userHasMode(cmd->user, 'r') == 1 && command->permLevel >= 1){
                 char *params[] = {":You have not registered: use NICK first"};
                 chat_createMessage(&reply, cmd->user, thisServer, ERR_NOTREGISTERED, params, 1);
                 break;
