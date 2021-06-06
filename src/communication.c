@@ -131,7 +131,7 @@ int com_insertQueue(struct com_QueueJob *job){
     struct com_ClientList *cliList = NULL;
     struct chat_UserData *user = job->user;
 
-    if(user->id == -1 || !user){ // User is disconnecting; nothing new to be sent
+    if(!user || user->id == -1){ // User is disconnecting; nothing new to be sent
         log_logMessage("User no longer valid", TRACE);
         return -1; 
     }

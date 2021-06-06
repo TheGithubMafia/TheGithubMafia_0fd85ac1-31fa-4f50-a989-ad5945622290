@@ -51,10 +51,17 @@ struct chat_Group {
     pthread_mutex_t groupMutex;
 };
 
+// Data about a user specific to a channel
+struct chat_ChannelUser {
+	struct chat_UserData *user;
+	int permLevel;
+};
+
 struct chat_Channel {
-	size_t id;
+	int id;
+	int max;
 	char name[CHANNEL_NAME_LENGTH];
-	struct link_List users;
+	struct chat_ChannelUser *users;
 	pthread_mutex_t channelMutex;
 };
 
@@ -146,7 +153,7 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
 int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user);
 
 // Places a pointer to the user into the Channel's list, and create it if needed
-struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user);
+struct chat_ChannelUser *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user);
 
 // Will fill a buffer with list of nicknames
 int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size);

@@ -304,7 +304,7 @@ struct chat_UserData *chat_getUserByName(char name[NICKNAME_LENGTH]){
             user = &serverLists.users[i];
             pthread_mutex_lock(&user->userMutex);
 
-            if(!strncmp(user->nickname, name, NICKNAME_LENGTH)){
+            if(user->id >= 0 && !strncmp(user->nickname, name, NICKNAME_LENGTH)){
                     pthread_mutex_unlock(&user->userMutex);
                     return user;
             }
@@ -448,7 +448,6 @@ int chat_userHasMode(struct chat_UserData *user, char mode){
 }
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user){
-    struct link_Node *node;
     struct chat_Channel *channel = channelNode->data;
     int ret = -1;
 
@@ -457,18 +456,18 @@ int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserDa
         return -1;
     }
 
-    pthread_mutex_lock(&channel->channelMutex);
-    for(node = channel->users.head; node != NULL; node = node->next){
-        if(node != NULL && node->data != NULL){
-            if(user == node->data){
-                // Match
-                link_removeNode(&channel->users, node);
-                ret = 1;
-                break;
-            }
-        }
-    }
-    pthread_mutex_unlock(&channel->channelMutex);
+    if(chat_isInChannel(channelNode, user) >= 0){
+        pthread_mutex_lock(&channel->channelMutex);
+		for(int i = 0; i < channel->max; i++){
+			if(channel->users[i].user == user){
+				// Match
+				memset(&channel->users[i], 0, sizeof(struct chat_ChannelUser));
+				ret = 1;
+				break;
+			}
+		}
+		pthread_mutex_unlock(&channel->channelMutex);
+	}
     
     return ret;
 }
@@ -536,6 +535,14 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     // TODO - make sure name is legal
     strncpy(channel->name, name, CHANNEL_NAME_LENGTH);
 
+	// Setup array of users with default size of 10
+	channel->max = 10;
+	channel->users = calloc(sizeof(struct chat_Channel), channel->max);
+	if(channel->users == NULL){
+        log_logError("Error creating channel", ERROR);
+        return NULL;
+	}
+
     // Add to the group
     if(group != NULL){
         pthread_mutex_lock(&group->groupMutex);
@@ -553,53 +560,60 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
 // Check if a user is in a channel
 int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct chat_Channel *channel = channelNode->data;
+	int ret = -1;
 
     pthread_mutex_lock(&channel->channelMutex);
-	int ret = -1;
-    for(struct link_Node *n = channel->users.head; n != NULL; n = n->next){
-        if(n->data == user){
+	for(int i = 0; i < channel->max; i++){
+		if(channel->users[i].user == user){
             ret = 1;
 			break;
-        }
-    }
+		}
+	}
     pthread_mutex_unlock(&channel->channelMutex);
 
     return ret;
 }
 
 // Add a user to a channel
-struct link_Node *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user){
+struct chat_ChannelUser *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct chat_Channel *channel = channelNode->data;
+	struct chat_ChannelUser *chanUser = NULL;
 
     if(chat_isInChannel(channelNode, user) < 0){
         pthread_mutex_lock(&channel->channelMutex);
-        struct link_Node *ret = link_add(&channel->users, user);
+		for(int i = 0; i < channel->max; i++){
+			if(channel->users[i].user == NULL){ // Empty spot
+				channel->users[i].user = user;
+				channel->users[i].permLevel = 0;
+				chanUser = &channel->users[i];
+				break;
+			}
+		}
         pthread_mutex_unlock(&channel->channelMutex);
-        
-        return ret;
     }
 
-    return NULL;
+    return chanUser;
 }
 
 // Will fill a string with a list of users
 int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
-    struct link_Node *node;
     struct chat_Channel *channel = channelNode->data;
     char nickname[NICKNAME_LENGTH];
     int pos = 1;
 
     buff[0] = ':';
     pthread_mutex_lock(&channel->channelMutex);
-    for(node = channel->users.head; node != NULL && pos < size; node = node->next){
-        chat_getNickname(nickname, node->data);
-        strncat(buff, nickname, size - pos - 1);
-        pos = strlen(buff);
+	for(int i = 0; i < channel->max; i++){
+		if(channel->users[i].user != NULL){
+			chat_getNickname(nickname, channel->users[i].user);
+			strncat(buff, nickname, size - pos - 1);
+			pos = strlen(buff);
 
-        // Space inbetween users
-        buff[pos] = ' ';
-        buff[pos + 1] = '\0';
-        pos++;
+			// Space inbetween users
+			buff[pos] = ' ';
+			buff[pos + 1] = '\0';
+			pos++;
+		}
     }
     pthread_mutex_unlock(&channel->channelMutex);
 
@@ -608,15 +622,15 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
 
 // Send a message to every user in a channel
 int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode){
-    struct link_Node *node;
 	struct chat_UserData *origin = cmd->user;
     struct chat_Channel *channel = channelNode->data;
 
     pthread_mutex_lock(&channel->channelMutex);
-    for(node = channel->users.head; node != NULL; node = node->next){
-        cmd->user = node->data;
-
-		if(cmd->user == origin){ // Dont send to sender
+	for(int i = 0; i < channel->max; i++){
+        cmd->user = channel->users[i].user;
+		
+		// Dont send to sender or invalid users
+		if(cmd->user == origin || cmd->user == NULL){
 			continue;
 		}
 
