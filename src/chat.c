@@ -376,10 +376,11 @@ struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *nam
 
     //Set user's data
     memset(user, 0, sizeof(struct chat_UserData));
-    //eventually get this id from saved user data
-    user->id = chat_globalUserID++;
     strncpy(user->nickname, name, NICKNAME_LENGTH);
     memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
+	chat_changeUserMode(user, '+', 'r');
+    //eventually get this id from saved user data
+    user->id = chat_globalUserID++;
 
     return user;
 }
@@ -405,15 +406,45 @@ int chat_deleteUser(struct chat_UserData *user){
     return 1;
 }
 
-int chat_userIsRegistered(struct chat_UserData *user){
-	char buff[NICKNAME_LENGTH];
-	chat_getNickname(buff, user);
+void chat_changeUserMode(struct chat_UserData *user, char op, char mode){
+	if(user == NULL || user->id < 0){
+		return;
+	}
 
-	if(strncmp(buff, UNREGISTERED_NAME, NICKNAME_LENGTH) == 0){
+	// No duplicates allowed
+	if(op == '+' && chat_userHasMode(user, mode) == 1){
+		return;
+	}
+
+	pthread_mutex_lock(&user->userMutex);
+	for(int i = 0; i < ARRAY_SIZE(user->modes); i++){
+		if(op == '-' && user->modes[i] == mode){
+			user->modes[i] = '\0';
+			break;
+		} else if(op == '+' && user->modes[i] == '\0'){
+			user->modes[i] = mode;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&user->userMutex);
+}
+
+int chat_userHasMode(struct chat_UserData *user, char mode){
+	if(user == NULL || user->id < 0){
 		return -1;
 	}
 
-	return 1;
+	int ret = -1;
+	pthread_mutex_lock(&user->userMutex);
+	for(int i = 0; i < ARRAY_SIZE(user->modes); i++){
+		if(user->modes[i] == mode){
+			ret = 1;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&user->userMutex);
+
+	return ret;
 }
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user){

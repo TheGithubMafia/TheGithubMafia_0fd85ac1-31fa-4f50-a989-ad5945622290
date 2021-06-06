@@ -37,7 +37,7 @@ struct chat_ServerLists {
 // except with socketInfo.socket must equal -1
 struct chat_UserData {
 	int id;
-	int admin;
+	char modes[5];
 	struct com_SocketInfo socketInfo;	
 	char nickname[NICKNAME_LENGTH + 1];
 	pthread_mutex_t userMutex;
@@ -126,7 +126,11 @@ struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *nam
 // Remove a user from the server
 int chat_deleteUser(struct chat_UserData *user);
 
-int chat_userIsRegistered(struct chat_UserData *user);
+// Adds or removes a mode from a user
+void chat_changeUserMode(struct chat_UserData *user, char op, char mode);
+
+// Checks if a user has a mode active
+int chat_userHasMode(struct chat_UserData *user, char mode);
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user);
 

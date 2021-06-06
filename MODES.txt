@@ -1,0 +1,7 @@
+This is a file that describes all the modes users and channels may have
+
+USERS
+i - Makes the user appear offline
+o - User is an operator						May ONLY be set with OPER
+r - User is not registered					May ONLY be set with NICK
+a - Marked as away

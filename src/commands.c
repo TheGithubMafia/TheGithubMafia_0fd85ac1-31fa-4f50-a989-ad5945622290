@@ -136,7 +136,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
     if(otherUser == NULL) { // No other user has this name
 		char oldName[NICKNAME_LENGTH];
 		chat_getNickname(oldName, user);
-		int isReg = chat_userIsRegistered(user);
+		int isUnreg = chat_userHasMode(user, 'r');
 
 		// Set the name in the user's buffer
         pthread_mutex_lock(&user->userMutex);
@@ -145,12 +145,13 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 
         params[0] = cmd->params[0];
 		// User is already registered
-		if(isReg == 1){
+		if(isUnreg != 1){
 			chat_createMessage(reply, user, oldName, "NICK", params, 1);
-			chat_sendServerMessage(reply);
+			chat_sendServerMessage(reply); // TODO - change to all channels user is in + "contacts"
 			return 1;
 		}
 
+		chat_changeUserMode(user, '-', 'r'); // They are now registered
 		params[1] = (char *) nick_welcome;
 		chat_createMessage(reply, user, thisServer, RPL_WELCOME, params, 2);
 		return 1;
