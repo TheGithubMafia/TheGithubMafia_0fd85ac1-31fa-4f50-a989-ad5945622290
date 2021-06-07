@@ -54,7 +54,7 @@ struct chat_Group {
 // Data about a user specific to a channel
 struct chat_ChannelUser {
 	struct chat_UserData *user;
-	int permLevel;
+	int permLevel; // 0 - Default, 1 - chanop
 };
 
 struct chat_Channel {
@@ -138,6 +138,9 @@ void chat_changeUserMode(struct chat_UserData *user, char op, char mode);
 
 // Checks if a user has a mode active
 int chat_userHasMode(struct chat_UserData *user, char mode);
+
+// Returns the privs the user has for a channel
+int chat_getUserChannelPrivs(struct chat_UserData *user, struct link_Node *chan);
 
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user);
 

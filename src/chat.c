@@ -447,27 +447,45 @@ int chat_userHasMode(struct chat_UserData *user, char mode){
 	return ret;
 }
 
+int chat_getUserChannelPrivs(struct chat_UserData *user, struct link_Node *chan) {
+	if(chan == NULL || chan->data == NULL || user == NULL || user->id < 0){
+		return -1;
+	}
+
+	struct chat_Channel *channel = chan->data;
+	int ret = -1;
+
+    pthread_mutex_lock(&channel->channelMutex);
+	for(int i = 0; i < channel->max; i++){
+		if(channel->users[i].user == user){
+			ret = channel->users[i].permLevel;
+			break;
+		}
+	}
+    pthread_mutex_unlock(&channel->channelMutex);
+
+	return ret;
+}
+
 int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user){
     struct chat_Channel *channel = channelNode->data;
     int ret = -1;
 
-    if(channel == NULL){
+    if(channel == NULL || user == NULL || user->id < 0){
         log_logMessage("Cannot remove user from channel", DEBUG);
         return -1;
     }
 
-    if(chat_isInChannel(channelNode, user) >= 0){
-        pthread_mutex_lock(&channel->channelMutex);
-		for(int i = 0; i < channel->max; i++){
-			if(channel->users[i].user == user){
-				// Match
-				memset(&channel->users[i], 0, sizeof(struct chat_ChannelUser));
-				ret = 1;
-				break;
-			}
+	pthread_mutex_lock(&channel->channelMutex);
+	for(int i = 0; i < channel->max; i++){
+		if(channel->users[i].user == user){
+			// Match
+			memset(&channel->users[i], 0, sizeof(struct chat_ChannelUser));
+			ret = 1;
+			break;
 		}
-		pthread_mutex_unlock(&channel->channelMutex);
 	}
+	pthread_mutex_unlock(&channel->channelMutex);
     
     return ret;
 }
@@ -559,6 +577,10 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
 
 // Check if a user is in a channel
 int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user){
+	if(user == NULL || channelNode == NULL || channelNode->data == NULL){
+		return -1;
+	}
+
     struct chat_Channel *channel = channelNode->data;
 	int ret = -1;
 
@@ -605,6 +627,10 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user != NULL){
+			if(channel->users[i].permLevel == 1){ // Channel operator
+				strncat(buff, "@", size - pos - 1);
+				pos++;
+			}
 			chat_getNickname(nickname, channel->users[i].user);
 			strncat(buff, nickname, size - pos - 1);
 			pos = strlen(buff);

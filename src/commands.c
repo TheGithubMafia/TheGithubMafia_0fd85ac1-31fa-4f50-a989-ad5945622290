@@ -21,11 +21,13 @@ int init_commands() {
     cmd_unknownCommand.user = NULL;
 
 	// Fill in command linked list
+	//			  WORD PARAM PERM COMMAND  
     cmd_addCommand("NICK", 1, 0, &cmd_nick);
     cmd_addCommand("PRIVMSG", 2, 1, &cmd_privmsg);
     cmd_addCommand("JOIN", 1, 1, &cmd_join);
     cmd_addCommand("NAMES", 1, 1, &cmd_names);
     cmd_addCommand("PART", 1, 1, &cmd_part);
+    cmd_addCommand("KICK", 2, 1, &cmd_kick);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
@@ -101,20 +103,59 @@ int cmd_runCommand(struct chat_Message *cmd){
     return ret;
 }
 
+struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName, struct chat_UserData *user, int reqPrivs) {
+    struct link_Node *chan = chat_getChannelByName(chanName);
+	char *params[] = {chanName};
+
+    if(chan == NULL){
+        params[1] = (char *) invalidChanName;
+        chat_createMessage(msg, user, thisServer, ERR_NOSUCHCHANNEL, params, 2);
+        return NULL;
+    }
+
+	if(chat_isInChannel(chan, user) < 0){
+		err_notonchannel(msg, chan->data, user);	
+		return NULL;
+	}
+
+	if(chat_getUserChannelPrivs(user, chan) < reqPrivs) {
+		err_chanoprivsneeded(msg, chan->data, user);
+		return NULL;
+	}
+
+	return chan;
+}
+
 // Generate a ERR_NOTONCHANNEL reply
 void err_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
-		char *params[] = {chan->name, ":You are not in this channel!"};
-		pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-        chat_createMessage(msg, user, thisServer, ERR_NOTONCHANNEL, params, 2);
-		pthread_mutex_unlock(&chan->channelMutex);
+	char *params[] = {chan->name, ":You are not in this channel!"};
+	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+	chat_createMessage(msg, user, thisServer, ERR_NOTONCHANNEL, params, 2);
+	pthread_mutex_unlock(&chan->channelMutex);
 }
 
 // Generate a RPL_ENDOFNAMES reply
 void rpl_endofnames(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
-		char *params[] = {chan->name, ":End of /NAMES list"};
-		pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
-        chat_createMessage(msg, user, thisServer, RPL_ENDOFNAMES, params, 2);
-		pthread_mutex_unlock(&chan->channelMutex);
+	char *params[] = {chan->name, ":End of /NAMES list"};
+	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+	chat_createMessage(msg, user, thisServer, RPL_ENDOFNAMES, params, 2);
+	pthread_mutex_unlock(&chan->channelMutex);
+}
+
+// Generate a ERR_USERNOTINCHANNEL reply
+void err_usernotinchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user, char *nick){
+	char *params[] = {nick, chan->name, ":Selected user not in this channel!"};
+	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+	chat_createMessage(msg, user, thisServer, ERR_USERNOTINCHANNEL, params, 3);
+	pthread_mutex_unlock(&chan->channelMutex);
+}
+
+// Generate a ERR_CHANOPRIVSNEEDED reply
+void err_chanoprivsneeded(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user){
+	char *params[] = {chan->name, ":You don't have sufficient privileges for this channel!"};
+	pthread_mutex_lock(&chan->channelMutex); // To make sure that chan->name is protected
+	chat_createMessage(msg, user, thisServer, ERR_CHANOPRIVSNEEDED, params, 2);
+	pthread_mutex_unlock(&chan->channelMutex);
 }
 
 // Changes a user's nickname
@@ -209,6 +250,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
         return 1;
     }
 
+	reply->user = user;
     chat_sendChannelMessage(reply, channel);
     return 2;
 }
@@ -220,17 +262,18 @@ const char *join_usage = ":Usage: <channel>";
 int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     struct chat_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
-    int size = 1;
+	int newChannel = -1;
     
     if(cmd->params[0][0] != '#'){
         params[0] = (char *) invalidChanName;
-        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, size);
+        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
         return -1;
     }
 
     struct link_Node *channel = chat_getChannelByName(cmd->params[0]);
     if(channel == NULL){
         channel = chat_createChannel(cmd->params[0], NULL);
+		newChannel = 1;
 
         if(channel == NULL){
            return -2; // Add better error later
@@ -241,15 +284,17 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
         log_logMessage(msg, INFO);
     }
 
-    chat_addToChannel(channel, user); // Check for error
+    struct chat_ChannelUser *chanUser = chat_addToChannel(channel, user); // Check for error
+	if(newChannel == 1){
+		chanUser->permLevel = 1; // First user is the operator
+	}
 
     // Success
     char nickname[NICKNAME_LENGTH];
     chat_getNickname(nickname, user);
     params[0] = cmd->params[0];
-    size = 1;
 
-    chat_createMessage(reply, user, nickname, "JOIN", params, size);
+    chat_createMessage(reply, user, nickname, "JOIN", params, 1);
     chat_sendChannelMessage(reply, channel);
 
     // Generate a NAMES command reply to the user for this channel
@@ -328,6 +373,40 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     size = 1;
 
     chat_createMessage(reply, user, nickname, "PART", params, size);
+    chat_sendChannelMessage(reply, channel);
+
+    return 1;
+}
+
+// Force a user to leave a channel
+// TODO - add error checking
+int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
+    struct chat_UserData *user = cmd->user, *otherUser;
+    char *params[ARRAY_SIZE(cmd->params)];
+	int size = 2;
+
+    struct link_Node *channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 1);
+	if(!channel){
+		return -1;
+	}
+
+    otherUser = chat_getUserByName(cmd->params[1]);
+    if(chat_removeUserFromChannel(channel, otherUser) < 0) { // Not in the channel
+		err_usernotinchannel(reply, channel->data, user, cmd->params[1]);
+		return -1;
+	}
+
+    // Success
+    char nickname[NICKNAME_LENGTH];
+    chat_getNickname(nickname, user);
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
+	if(cmd->params[2][0] != '\0'){
+		params[2] = cmd->params[2];
+		size = 3;
+	}
+
+    chat_createMessage(reply, otherUser, nickname, "KICK", params, size);
     chat_sendChannelMessage(reply, channel);
 
     return 1;
