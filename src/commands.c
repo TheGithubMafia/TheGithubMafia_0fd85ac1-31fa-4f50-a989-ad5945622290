@@ -2,7 +2,7 @@
 
 struct cmd_CommandList cmd_commandList;
 struct chat_Message cmd_unknownCommand;
-char *thisServer = "roundtable.example.com";
+char *thisServer = "roundtable.example.com"; 
 
 // Common reply messages
 const char *invalidChanName = ":Invalid channel name";
@@ -28,6 +28,7 @@ int init_commands() {
     cmd_addCommand("NAMES", 1, 1, &cmd_names);
     cmd_addCommand("PART", 1, 1, &cmd_part);
     cmd_addCommand("KICK", 2, 1, &cmd_kick);
+    cmd_addCommand("MODE", 2, 1, &cmd_mode);
 
     log_logMessage("Successfully initalized commands", INFO);
     return 1;
@@ -385,7 +386,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
     char *params[ARRAY_SIZE(cmd->params)];
 	int size = 2;
 
-    struct link_Node *channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 1);
+    struct link_Node *channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
 	if(!channel){
 		return -1;
 	}
@@ -410,4 +411,63 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
     chat_sendChannelMessage(reply, channel);
 
     return 1;
+}
+
+// Edit modes for channels and users
+int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
+    struct chat_UserData *user = cmd->user, *otherUser = NULL;
+    char *params[ARRAY_SIZE(cmd->params)];
+	char nickname[NICKNAME_LENGTH];
+
+	//TODO - split this into two functions
+
+	//Check whether mode is for channel or user
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
+    if(cmd->params[0][0] != '#'){
+        otherUser = chat_getUserByName(cmd->params[0]);
+        if(otherUser == NULL){
+			params[1] = ":Nick not found!";
+            chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);
+            return -1;
+        } else if (otherUser != user){
+			params[1] = ":You may not MODE a user other than yourself";
+            chat_createMessage(reply, user, thisServer, ERR_USERSDONTMATCH, params, 2);
+            return -1;
+		}
+
+		char op = cmd->params[1][0];
+		int hasOp = op == '-' || op == '+' ? 1 : 0; // If there is an operation dont check it
+		if(hasOp == 0){
+			op = '+'; // If no op given, default to +
+		}
+
+		for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+			if(chat_isUserMode(cmd->params[1][i]) == -1){
+				char rpl[20];
+				snprintf(rpl, ARRAY_SIZE(rpl), ":No such mode: %c", cmd->params[1][i]);
+
+				params[1] = rpl;
+				chat_createMessage(reply, user, thisServer, ERR_UNKNOWNMODE, params, 2);
+				return -1;
+			}
+
+			// May not set themselves as OP or registered
+			if(op == '+' && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r')){
+				return 2; // Say nothing
+			}
+		}
+
+		// Set all the modes
+		for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+			chat_changeUserMode(user, op, cmd->params[1][i]);		
+		}
+
+    } else { // To a channel
+		
+    }
+
+	chat_getNickname(nickname, user);
+	chat_createMessage(reply, user, nickname, "MODE", params, 2);
+	return 1;
 }

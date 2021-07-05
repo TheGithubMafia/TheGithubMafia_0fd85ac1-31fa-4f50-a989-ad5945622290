@@ -65,4 +65,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply);
 // Forcefully remove a user from a channel
 int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Change modes for a user or channel
+int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply);
+
 #endif

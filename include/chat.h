@@ -54,12 +54,13 @@ struct chat_Group {
 // Data about a user specific to a channel
 struct chat_ChannelUser {
 	struct chat_UserData *user;
-	int permLevel; // 0 - Default, 1 - chanop
+	int permLevel; // 0 - Default, 1 - chanvoice, 2 - chanop
 };
 
 struct chat_Channel {
 	int id;
 	int max;
+	char modes[5];
 	char name[CHANNEL_NAME_LENGTH];
 	struct chat_ChannelUser *users;
 	pthread_mutex_t channelMutex;
@@ -138,6 +139,9 @@ void chat_changeUserMode(struct chat_UserData *user, char op, char mode);
 
 // Checks if a user has a mode active
 int chat_userHasMode(struct chat_UserData *user, char mode);
+
+// Checks if a given mode is valid
+int chat_isUserMode(char mode);
 
 // Returns the privs the user has for a channel
 int chat_getUserChannelPrivs(struct chat_UserData *user, struct link_Node *chan);

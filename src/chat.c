@@ -10,6 +10,7 @@
 
 struct chat_ServerLists serverLists = {0};
 size_t chat_globalUserID = 0;
+char chat_userModes[] = {'i', 'o', 'r', 'a'};
 
 struct chat_DataQueue dataQueue;
 
@@ -445,6 +446,16 @@ int chat_userHasMode(struct chat_UserData *user, char mode){
 	pthread_mutex_unlock(&user->userMutex);
 
 	return ret;
+}
+
+int chat_isUserMode(char mode){
+	for(int i = 0; i < ARRAY_SIZE(chat_userModes); i++){
+		if(mode == chat_userModes[i]){
+			return 1;
+		}
+	}
+	
+	return -1;
 }
 
 int chat_getUserChannelPrivs(struct chat_UserData *user, struct link_Node *chan) {
