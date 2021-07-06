@@ -11,6 +11,7 @@
 struct chat_ServerLists serverLists = {0};
 size_t chat_globalUserID = 0;
 char chat_userModes[] = {'i', 'o', 'r', 'a'};
+char chat_chanModes[] = {'o', 's', 'i', 'b', 'v', 'm', 'k'};
 
 struct chat_DataQueue dataQueue;
 
@@ -448,6 +449,14 @@ int chat_userHasMode(struct chat_UserData *user, char mode){
 	return ret;
 }
 
+int chat_isValidMode(char mode, int isChan){
+	if(isChan == -1){
+		return chat_isUserMode(mode);
+	}
+
+	return chat_isChanMode(mode);
+}
+
 int chat_isUserMode(char mode){
 	for(int i = 0; i < ARRAY_SIZE(chat_userModes); i++){
 		if(mode == chat_userModes[i]){
@@ -586,19 +595,64 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     return node;
 }
 
-// Check if a user is in a channel
-int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user){
-	if(user == NULL || channelNode == NULL || channelNode->data == NULL){
+// Takes a channel mode and executes it
+int chat_executeChanMode(char op, char mode, struct link_Node *channel, char *data){
+	struct chat_UserData *user = chat_getUserByName(data);
+
+	switch (mode) {
+		case 'o':
+			return chat_giveChanPerms(channel, user, op, 2);	
+	}
+
+	return 1;
+}
+
+int chat_isChanMode(char mode){
+	for(int i = 0; i < ARRAY_SIZE(chat_chanModes); i++){
+		if(mode == chat_chanModes[i]){
+			return 1;
+		}
+	}
+	
+	return -1;
+}
+
+// Remove or give chan op or voice
+int chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user, char op, int perm){
+	if(channelNode == NULL || channelNode->data == NULL){
 		return -1;
 	}
 
     struct chat_Channel *channel = channelNode->data;
-	int ret = -1;
+	struct chat_ChannelUser *chanUser = chat_isInChannel(channelNode, user);
+	if(chanUser == NULL){
+		return -1;
+	}
+
+    pthread_mutex_lock(&channel->channelMutex);
+	if(op == '-'){
+		chanUser->permLevel = 0;
+	} else {
+		chanUser->permLevel = perm;
+	}
+    pthread_mutex_unlock(&channel->channelMutex);
+
+	return 1;
+}
+
+// Check if a user is in a channel
+struct chat_ChannelUser *chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user){
+	if(user == NULL || channelNode == NULL || channelNode->data == NULL){
+		return NULL;
+	}
+
+    struct chat_Channel *channel = channelNode->data;
+	struct chat_ChannelUser *ret = NULL;
 
     pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user == user){
-            ret = 1;
+            ret = &channel->users[i];
 			break;
 		}
 	}
@@ -612,7 +666,7 @@ struct chat_ChannelUser *chat_addToChannel(struct link_Node *channelNode, struct
     struct chat_Channel *channel = channelNode->data;
 	struct chat_ChannelUser *chanUser = NULL;
 
-    if(chat_isInChannel(channelNode, user) < 0){
+    if(chat_isInChannel(channelNode, user) == NULL){ // Not in the channel // Not in the channel
         pthread_mutex_lock(&channel->channelMutex);
 		for(int i = 0; i < channel->max; i++){
 			if(channel->users[i].user == NULL){ // Empty spot
@@ -638,10 +692,14 @@ int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user != NULL){
-			if(channel->users[i].permLevel == 1){ // Channel operator
+			if(channel->users[i].permLevel == 2){ // Channel operator
 				strncat(buff, "@", size - pos - 1);
 				pos++;
+			} else if (channel->users[i].permLevel == 1){ // Channel voice
+				strncat(buff, "+", size - pos - 1);
+				pos++;
 			}
+
 			chat_getNickname(nickname, channel->users[i].user);
 			strncat(buff, nickname, size - pos - 1);
 			pos = strlen(buff);

@@ -114,7 +114,7 @@ struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName
         return NULL;
     }
 
-	if(chat_isInChannel(chan, user) < 0){
+	if(chat_isInChannel(chan, user) == NULL){
 		err_notonchannel(msg, chan->data, user);	
 		return NULL;
 	}
@@ -226,13 +226,13 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
             chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, size);
             return -1;
         }
-    } else { // To a channel
+    } else { // To a channel TODO - Replace this with checkChannelPerms
         channel = chat_getChannelByName(cmd->params[0]);
         if(channel == NULL){
 			params[1] = ":Channel not found!";
             chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, size);
             return -1;
-        } else if (chat_isInChannel(channel, user) < 0){
+        } else if (chat_isInChannel(channel, user) == NULL){
 			params[1] = ":You do not have permission to send mesesages to this channel!";
             chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, size);
            return -1; 
@@ -287,7 +287,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 
     struct chat_ChannelUser *chanUser = chat_addToChannel(channel, user); // Check for error
 	if(newChannel == 1){
-		chanUser->permLevel = 1; // First user is the operator
+		chanUser->permLevel = 2; // First user is the operator
 	}
 
     // Success
@@ -415,59 +415,106 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
 
 // Edit modes for channels and users
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
+	struct chat_UserData *user = cmd->user;
+    char *params[ARRAY_SIZE(cmd->params)];
+
+	// Default values
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
+
+	int isChan = -1;
+    if(cmd->params[0][0] == '#'){
+		isChan = 1;
+	}
+
+	// Make sure all modes are valid
+	char op = cmd->params[1][0];
+	int hasOp = op == '-' || op == '+' ? 1 : 0; // If there is an operation dont check it
+	if(hasOp == 0){
+		op = '+'; // If no op given, default to +
+	}
+
+	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+		if(chat_isValidMode(cmd->params[1][i], isChan) == -1){
+			char rpl[20];
+			snprintf(rpl, ARRAY_SIZE(rpl), ":No such mode: %c", cmd->params[1][i]);
+
+			params[1] = rpl;
+			chat_createMessage(reply, user, thisServer, ERR_UNKNOWNMODE, params, 2);
+			return -1;
+		}
+
+		// May not set themselves as OP or registered
+		if(isChan == -1 && op == '+' && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r')){
+			return 2; // Say nothing
+		}
+	}
+
+	//Check whether mode is for channel or user
+    if(cmd->params[0][0] != '#'){
+		return cmd_modeUser(cmd, reply, op, hasOp);
+    }
+
+	return cmd_modeChan(cmd, reply, op, hasOp);
+}
+
+// Used by cmd_mode specifically for the user
+int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
     struct chat_UserData *user = cmd->user, *otherUser = NULL;
+    char *params[ARRAY_SIZE(cmd->params)];
+
+	// Default values
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
+
+	otherUser = chat_getUserByName(cmd->params[0]);
+	if(otherUser == NULL){
+		params[1] = ":Nick not found!";
+		chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);
+		return -1;
+	} else if (otherUser != user){
+		params[1] = ":You may not MODE a user other than yourself";
+		chat_createMessage(reply, user, thisServer, ERR_USERSDONTMATCH, params, 2);
+		return -1;
+	}
+
+	// Set all the modes
+	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+		chat_changeUserMode(user, op, cmd->params[1][i]);		
+	}
+
+	chat_createMessage(reply, user, cmd->params[0], "MODE", params, 2);
+	return 1;
+}
+
+// Used by cmd_mode specifically for a channel
+int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
+    struct chat_UserData *user = cmd->user;
+	struct link_Node *channel = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
 	char nickname[NICKNAME_LENGTH];
 
-	//TODO - split this into two functions
-
-	//Check whether mode is for channel or user
+	// Default values
     params[0] = cmd->params[0];
 	params[1] = cmd->params[1];
-    if(cmd->params[0][0] != '#'){
-        otherUser = chat_getUserByName(cmd->params[0]);
-        if(otherUser == NULL){
-			params[1] = ":Nick not found!";
-            chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, 2);
-            return -1;
-        } else if (otherUser != user){
-			params[1] = ":You may not MODE a user other than yourself";
-            chat_createMessage(reply, user, thisServer, ERR_USERSDONTMATCH, params, 2);
-            return -1;
+	params[2] = cmd->params[2];
+
+	channel = cmd_checkChannelPerms(cmd, cmd->params[0], user, 2);
+	if(!channel){
+		return -1;
+	}
+
+	// Set all the modes
+	int ret = 1;
+	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+		ret = chat_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
+		if(ret == -1){
+			err_usernotinchannel(reply, channel->data, user, cmd->params[2]);
+			return -1;
 		}
-
-		char op = cmd->params[1][0];
-		int hasOp = op == '-' || op == '+' ? 1 : 0; // If there is an operation dont check it
-		if(hasOp == 0){
-			op = '+'; // If no op given, default to +
-		}
-
-		for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-			if(chat_isUserMode(cmd->params[1][i]) == -1){
-				char rpl[20];
-				snprintf(rpl, ARRAY_SIZE(rpl), ":No such mode: %c", cmd->params[1][i]);
-
-				params[1] = rpl;
-				chat_createMessage(reply, user, thisServer, ERR_UNKNOWNMODE, params, 2);
-				return -1;
-			}
-
-			// May not set themselves as OP or registered
-			if(op == '+' && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r')){
-				return 2; // Say nothing
-			}
-		}
-
-		// Set all the modes
-		for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-			chat_changeUserMode(user, op, cmd->params[1][i]);		
-		}
-
-    } else { // To a channel
-		
-    }
+	}
 
 	chat_getNickname(nickname, user);
-	chat_createMessage(reply, user, nickname, "MODE", params, 2);
+	chat_createMessage(reply, user, nickname, "MODE", params, 3);
 	return 1;
 }

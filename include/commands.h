@@ -68,4 +68,10 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply);
 // Change modes for a user or channel
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply);
 
+// Used by cmd_mode spefically for the user
+int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
+
+// Used by cmd_mode spefically for a channel
+int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
+
 #endif

@@ -141,6 +141,8 @@ void chat_changeUserMode(struct chat_UserData *user, char op, char mode);
 int chat_userHasMode(struct chat_UserData *user, char mode);
 
 // Checks if a given mode is valid
+int chat_isValidMode(char mode, int isChan);
+
 int chat_isUserMode(char mode);
 
 // Returns the privs the user has for a channel
@@ -156,8 +158,16 @@ struct link_Node *chat_getChannelByName(char *name);
 // Create a channel with the specified name, and add it to the specified group
 struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
 
+// Take a channel mode and execute it
+int chat_executeChanMode(char op, char mode, struct link_Node *channel, char *data);
+
+int chat_isChanMode(char mode);
+
+// Give or remove chan op or voice
+int chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user, char op, int perm);
+
 // check if a user is in a channel
-int chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user);
+struct chat_ChannelUser *chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user);
 
 // Places a pointer to the user into the Channel's list, and create it if needed
 struct chat_ChannelUser *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user);
