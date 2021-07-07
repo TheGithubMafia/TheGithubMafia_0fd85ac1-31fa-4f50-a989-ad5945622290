@@ -226,17 +226,15 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
             chat_createMessage(reply, user, thisServer, ERR_NOSUCHNICK, params, size);
             return -1;
         }
-    } else { // To a channel TODO - Replace this with checkChannelPerms
-        channel = chat_getChannelByName(cmd->params[0]);
-        if(channel == NULL){
-			params[1] = ":Channel not found!";
-            chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, size);
-            return -1;
-        } else if (chat_isInChannel(channel, user) == NULL){
-			params[1] = ":You do not have permission to send mesesages to this channel!";
-            chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, size);
-           return -1; 
-        }
+    } else { // To a channel
+		channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 0);
+        if(channel == NULL)
+			return -1;
+
+		if(chat_channelHasMode('m', channel) && chat_getUserChannelPrivs(user, channel) < 1){
+			chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, 1);
+			return -1;
+		}
     }
 
     // Success
@@ -499,17 +497,17 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	params[1] = cmd->params[1];
 	params[2] = cmd->params[2];
 
-	channel = cmd_checkChannelPerms(cmd, cmd->params[0], user, 2);
+	channel = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
 	if(!channel){
 		return -1;
 	}
 
 	// Set all the modes
-	int ret = 1;
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-		ret = chat_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
-		if(ret == -1){
-			err_usernotinchannel(reply, channel->data, user, cmd->params[2]);
+		char *ret = chat_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
+		if(ret != NULL){
+			params[0] = params[2]; // Problematic value
+			chat_createMessage(reply, user, thisServer, ret, params, 1);
 			return -1;
 		}
 	}

@@ -595,16 +595,80 @@ struct link_Node *chat_createChannel(char *name, struct chat_Group *group){
     return node;
 }
 
+int chat_channelHasMode(char mode, struct link_Node *channelNode){
+	struct chat_Channel *channel = channelNode->data;
+	int ret = -1;
+
+	if(channelNode == NULL || channel == NULL){
+		return -1;
+	}
+
+	pthread_mutex_lock(&channel->channelMutex);
+	for (int i = 0; i < ARRAY_SIZE(channel->modes); i++){
+		if(channel->modes[i] == mode) {
+			ret = 1;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&channel->channelMutex);
+
+	return ret;
+}
+
 // Takes a channel mode and executes it
-int chat_executeChanMode(char op, char mode, struct link_Node *channel, char *data){
-	struct chat_UserData *user = chat_getUserByName(data);
+char *chat_executeChanMode(char op, char mode, struct link_Node *channelNode, char *data){
+	int perm = 1;
+	struct chat_Channel *channel = channelNode->data;
+
+	if(channelNode == NULL || channel == NULL){
+		return ERR_NOSUCHCHANNEL;
+	}
 
 	switch (mode) {
 		case 'o':
-			return chat_giveChanPerms(channel, user, op, 2);	
+			perm++;
+			goto change_chan_perm; // Fallthrough because 'v' and 'o' are only slightly different
+		case 'v':
+		change_chan_perm:
+			struct chat_UserData *user = chat_getUserByName(data);
+			if(user == NULL){
+				return ERR_NOSUCHNICK;
+			}
+			return chat_giveChanPerms(channelNode, user, op, perm);	
+		
+		default: // No special action needed, simply add it to the array
+			chat_changeChannelModeArray(op, mode, channelNode);
 	}
 
-	return 1;
+	return NULL; // Successfull - no error message
+}
+
+// Adds or removes a mode from a channel's modes array
+// TODO - adding/removing could be more efficient
+void chat_changeChannelModeArray(char op, char mode, struct link_Node *channelNode){
+	struct chat_Channel *channel = channelNode->data;
+
+	if(channelNode == NULL || channel == NULL)
+		return;
+
+	pthread_mutex_lock(&channel->channelMutex);
+	for(int i = 0; i < ARRAY_SIZE(channel->modes); i++){
+		if(op == '+'){
+			if(channel->modes[i] == mode){
+				op = '-';
+			}
+
+			if(channel->modes[i] == '\0'){
+				channel->modes[i] = mode;
+				op = '-';
+			}
+		} else {
+			if(channel->modes[i] == mode){ // Go thru to remove all duplicates
+				channel->modes[i] = '\0';
+			}
+		}
+	}
+	pthread_mutex_unlock(&channel->channelMutex);
 }
 
 int chat_isChanMode(char mode){
@@ -618,15 +682,15 @@ int chat_isChanMode(char mode){
 }
 
 // Remove or give chan op or voice
-int chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user, char op, int perm){
+char *chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user, char op, int perm){
 	if(channelNode == NULL || channelNode->data == NULL){
-		return -1;
+		return ERR_UNKNOWNERROR;
 	}
 
     struct chat_Channel *channel = channelNode->data;
 	struct chat_ChannelUser *chanUser = chat_isInChannel(channelNode, user);
 	if(chanUser == NULL){
-		return -1;
+		return ERR_USERNOTINCHANNEL;
 	}
 
     pthread_mutex_lock(&channel->channelMutex);
@@ -637,7 +701,7 @@ int chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user
 	}
     pthread_mutex_unlock(&channel->channelMutex);
 
-	return 1;
+	return NULL;
 }
 
 // Check if a user is in a channel
