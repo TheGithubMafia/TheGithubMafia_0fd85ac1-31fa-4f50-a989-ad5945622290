@@ -32,7 +32,7 @@ struct com_DataQueue {
 // Jobs for queues
 struct com_QueueJob {
     int type;
-    struct chat_UserData *user;
+    struct usr_UserData *user;
     char str[1024];
     struct chat_Message *msg; 
 };
@@ -63,10 +63,10 @@ int init_server();
 void com_close();
 
 // Will send a string to client inside node, also appends \r\n
-int com_sendStr(struct chat_UserData *user, char *msg);
+int com_sendStr(struct usr_UserData *user, char *msg);
 
 // Remove all user jobs from queue
-int com_cleanQueue(struct chat_UserData *user, int sock);
+int com_cleanQueue(struct usr_UserData *user, int sock);
 
 // Insert selected job into the correct queue for processing
 int com_insertQueue(struct com_QueueJob *job);

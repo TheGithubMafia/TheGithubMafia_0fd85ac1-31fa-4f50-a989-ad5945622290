@@ -8,11 +8,11 @@
 #include "logging.h"
 #include "linkedlist.h"
 #include "commands.h"
+#include "user.h"
+#include "channel.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
-#define NICKNAME_LENGTH 9
-#define CHANNEL_NAME_LENGTH 201
-#define UNREGISTERED_NAME "unreg"
+#define GROUP_NAME_LENGTH 201
 
 /*  Note about the structure of the users
     All new users are added to the main linked
@@ -23,47 +23,19 @@
 */
 struct chat_ServerLists {
 	int max;
-	struct chat_UserData *users;
+	struct usr_UserData *users;
 	struct link_List groups;	
 	pthread_mutex_t groupsMutex;
 	struct link_List channels;
 	pthread_mutex_t channelsMutex;
 };
 
-// Data about an user
-// When a user is first loaded from save
-// All details will come from the save
-// except socketInfo, it must filled with 0 bytes
-// except with socketInfo.socket must equal -1
-struct chat_UserData {
-	int id;
-	char modes[5];
-	struct com_SocketInfo socketInfo;	
-	char nickname[NICKNAME_LENGTH + 1];
-	pthread_mutex_t userMutex;
-};
-
 // New feature: A group a channels that a user can join
 // All at once, and an operator has full control over all
 struct chat_Group {
-    char name[CHANNEL_NAME_LENGTH];
+    char name[GROUP_NAME_LENGTH];
     struct link_List channels;
     pthread_mutex_t groupMutex;
-};
-
-// Data about a user specific to a channel
-struct chat_ChannelUser {
-	struct chat_UserData *user;
-	int permLevel; // 0 - Default, 1 - chanvoice, 2 - chanop
-};
-
-struct chat_Channel {
-	int id;
-	int max;
-	char modes[5];
-	char name[CHANNEL_NAME_LENGTH];
-	struct chat_ChannelUser *users;
-	pthread_mutex_t channelMutex;
 };
 
 struct chat_DataQueue {
@@ -76,12 +48,15 @@ struct chat_DataQueue {
 // The userNode is used to identify the user when receiving
 // and used to identify the recipient when sending
 struct chat_Message {
-    struct chat_UserData *user;
+    struct usr_UserData *user;
     char prefix[50];
     char command[50];
     int paramCount;
     char params[10][400];
 };
+
+// So all functions can access this global list
+extern struct chat_ServerLists serverLists;
 
 int init_chat();
 
@@ -108,7 +83,7 @@ int chat_sendMessage(struct chat_Message *msg);
 int chat_sendServerMessage(struct chat_Message *cmd);
 
 // Fills in a Message struct
-int chat_createMessage(struct chat_Message *msg, struct chat_UserData *user, char *prefix, char *cmd, char **params, int paramCount);
+int chat_createMessage(struct chat_Message *msg, struct usr_UserData *user, char *prefix, char *cmd, char **params, int paramCount);
 
 // Converts a message struct into a string form suitable for sending
 int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr);
@@ -116,71 +91,7 @@ int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr);
 // Locate the next space character
 int chat_findNextSpace(int starting, int size, char *str);
 
-// Fills in buffer with selected user's nickname
-int chat_getNickname(char buff[NICKNAME_LENGTH], struct chat_UserData *user);
-
-//Get a user by name
-struct chat_UserData *chat_getUserByName(char name[NICKNAME_LENGTH]);
-
-//Get a user by id
-struct chat_UserData *chat_getUserById(int id);
-
-//Get a user by socket fd
-struct chat_UserData *chat_getUserBySocket(int sock);
-
-// Returns a new user, after adding them to the main list
-struct chat_UserData *chat_createUser(struct com_SocketInfo *sockInfo, char *name);
-
-// Remove a user from the server
-int chat_deleteUser(struct chat_UserData *user);
-
-// Adds or removes a mode from a user
-void chat_changeUserMode(struct chat_UserData *user, char op, char mode);
-
-// Checks if a user has a mode active
-int chat_userHasMode(struct chat_UserData *user, char mode);
-
 // Checks if a given mode is valid
 int chat_isValidMode(char mode, int isChan);
-
-int chat_isUserMode(char mode);
-
-// Returns the privs the user has for a channel
-int chat_getUserChannelPrivs(struct chat_UserData *user, struct link_Node *chan);
-
-int chat_removeUserFromChannel(struct link_Node *channelNode, struct chat_UserData *user);
-
-int chat_removeUserFromAllChannels(struct chat_UserData *user);
-
-// Returns the node to a channel if it exists
-struct link_Node *chat_getChannelByName(char *name);
-
-// Create a channel with the specified name, and add it to the specified group
-struct link_Node *chat_createChannel(char *name, struct chat_Group *group);
-
-int chat_channelHasMode(char mode, struct link_Node *channelNode);
-
-// Take a channel mode and execute it
-char *chat_executeChanMode(char op, char mode, struct link_Node *channel, char *data);
-
-// Adds or removes a mode from a channel's modes array
-void chat_changeChannelModeArray(char op, char mode, struct link_Node *channelNode);
-
-int chat_isChanMode(char mode);
-
-// Give or remove chan op or voice
-char *chat_giveChanPerms(struct link_Node *channelNode, struct chat_UserData *user, char op, int perm);
-
-// check if a user is in a channel
-struct chat_ChannelUser *chat_isInChannel(struct link_Node *channelNode, struct chat_UserData *user);
-
-// Places a pointer to the user into the Channel's list, and create it if needed
-struct chat_ChannelUser *chat_addToChannel(struct link_Node *channelNode, struct chat_UserData *user);
-
-// Will fill a buffer with list of nicknames
-int chat_getUsersInChannel(struct link_Node *channelNode, char *buff, int size);
-
-// Sends a message to all online users in this room
-int chat_sendChannelMessage(struct chat_Message *cmd, struct link_Node *channelNode);
 
 #endif

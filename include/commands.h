@@ -4,11 +4,13 @@
 #include "chat.h"
 #include "linkedlist.h"
 #include "numerics.h"
+#include "user.h"
+#include "channel.h"
 
 #define NUMERIC_SIZE 15
 
 struct chat_Message;
-struct chat_Channel;
+struct chan_Channel;
 
 struct cmd_CommandList {
     struct link_List commands;	
@@ -36,16 +38,16 @@ int cmd_addCommand(char *word, int minParams, int permLevel, int (*func)(struct 
 int cmd_runCommand(struct chat_Message *cmd);
 
 // Will check if a user is able to execute a command in a channel
-struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName, struct chat_UserData *user, int reqPrivs);
+struct link_Node *cmd_checkChannelPerms(struct chat_Message *msg, char *chanName, struct usr_UserData *user, int reqPrivs);
 
 /* Reply generators */
-void err_notonchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user);
+void err_notonchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
 
-void rpl_endofnames(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user);
+void rpl_endofnames(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
 
-void err_usernotinchannel(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user, char *nick);
+void err_usernotinchannel(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user, char *nick);
 
-void err_chanoprivsneeded(struct chat_Message *msg, struct chat_Channel *chan, struct chat_UserData *user);
+void err_chanoprivsneeded(struct chat_Message *msg, struct chan_Channel *chan, struct usr_UserData *user);
 
 // Change a user's nickname
 int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);

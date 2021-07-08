@@ -76,7 +76,7 @@ void com_close(){
 }
 
 // Make a new job and insert it into the queue for sending
-int com_sendStr(struct chat_UserData *user, char *msg){
+int com_sendStr(struct usr_UserData *user, char *msg){
     struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
     job->user = user;
 
@@ -87,7 +87,7 @@ int com_sendStr(struct chat_UserData *user, char *msg){
 }
 
 // Will remove all instances of a user from the queue
-int com_cleanQueue(struct chat_UserData *user, int sock){
+int com_cleanQueue(struct usr_UserData *user, int sock){
     struct com_ClientList *cliList;
     struct link_Node *node;
     struct com_QueueJob *job;
@@ -129,7 +129,7 @@ int com_cleanQueue(struct chat_UserData *user, int sock){
 
 int com_insertQueue(struct com_QueueJob *job){
     struct com_ClientList *cliList = NULL;
-    struct chat_UserData *user = job->user;
+    struct usr_UserData *user = job->user;
 
     if(!user || user->id == -1){ // User is disconnecting; nothing new to be sent
         log_logMessage("User no longer valid", TRACE);
@@ -206,7 +206,7 @@ int com_hasSocket(int socket, struct com_ClientList *cliList){
 // Will return location of job if true, else -1
 int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
     struct link_Node *node = NULL;
-    struct chat_UserData *user = NULL;
+    struct usr_UserData *user = NULL;
     int loc = 0;
 
     pthread_mutex_lock(&dataQ->queueMutex); 
@@ -241,7 +241,7 @@ void *com_communicateWithClients(void *param){
         clientList->clients[x].events = POLLIN | POLLHUP | POLLOUT;
     }
 
-    struct chat_UserData *user;
+    struct usr_UserData *user;
     while(1){
         pthread_mutex_lock(&clientList->clientListMutex);
 
@@ -263,7 +263,7 @@ void *com_communicateWithClients(void *param){
                     clientList->connected--;
 
                 } else if (clientList->clients[i].revents & POLLIN){
-                    user = chat_getUserBySocket(sockfd);
+                    user = usr_getUserBySocket(sockfd);
                     job = malloc(sizeof(struct com_QueueJob));
                     if(job == NULL){
                             log_logError("Error creating job", DEBUG);
@@ -283,7 +283,7 @@ void *com_communicateWithClients(void *param){
                         }
 
                         pthread_mutex_unlock(&clientList->clientListMutex);
-                        chat_deleteUser(user);
+                        usr_deleteUser(user);
                         pthread_mutex_lock(&clientList->clientListMutex);
                     } else {
                         chat_insertQueue(job);
@@ -371,7 +371,7 @@ int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientLis
         
         pthread_mutex_unlock(&clientList[least].clientListMutex);
 
-        chat_createUser(&addr, "unreg");
+        usr_createUser(&addr, UNREGISTERED_NAME);
 
         return least;
     }
