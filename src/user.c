@@ -70,6 +70,7 @@ struct usr_UserData *usr_getUserById(int id){
 }
 
 //Create a new user and return it
+// TODO fix double nicks if two clients request same name slightly different times
 struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name){
     struct usr_UserData *user;
 	int success = -1;

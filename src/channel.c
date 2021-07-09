@@ -154,6 +154,7 @@ int chan_channelHasMode(char mode, struct link_Node *channelNode){
 char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, char *data){
 	int perm = 1;
 	struct chan_Channel *channel = channelNode->data;
+	struct usr_UserData *user;
 
 	if(channelNode == NULL || channel == NULL){
 		return ERR_NOSUCHCHANNEL;
@@ -165,7 +166,7 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 			goto change_chan_perm; // Fallthrough because 'v' and 'o' are only slightly different
 		case 'v':
 		change_chan_perm:
-			struct usr_UserData *user = usr_getUserByName(data);
+			user = usr_getUserByName(data);
 			if(user == NULL){
 				return ERR_NOSUCHNICK;
 			}
