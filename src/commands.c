@@ -183,6 +183,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 		// Set the name in the user's buffer
         pthread_mutex_lock(&user->userMutex);
         strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH);
+		user->nickname[ARRAY_SIZE(user->nickname)-1] = '\0';
         pthread_mutex_unlock(&user->userMutex);
 
         params[0] = cmd->params[0];
