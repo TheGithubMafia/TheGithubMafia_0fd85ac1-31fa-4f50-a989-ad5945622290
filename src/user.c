@@ -3,26 +3,26 @@
 size_t usr_globalUserID = 0;
 const char usr_userModes[] = {'i', 'o', 'r', 'a'};
 
-int usr_getNickname(char buff[NICKNAME_LENGTH], struct usr_UserData *user){
+int usr_getNickname(char *buff, struct usr_UserData *user){
     if(user == NULL || user->id < 0){
         return -1;
     }
 
     pthread_mutex_lock(&user->userMutex);
-    strncpy(buff, user->nickname, NICKNAME_LENGTH);
+    strncpy(buff, user->nickname, fig_Configuration.nickLen);
     pthread_mutex_unlock(&user->userMutex);
 
     return 1;
 }
 
-struct usr_UserData *usr_getUserByName(char name[NICKNAME_LENGTH]){
+struct usr_UserData *usr_getUserByName(char *name){
     struct usr_UserData *user;
 
     for(int i = 0; i < serverLists.max; i++){
             user = &serverLists.users[i];
             pthread_mutex_lock(&user->userMutex);
 
-            if(user->id >= 0 && !strncmp(user->nickname, name, NICKNAME_LENGTH)){
+            if(user->id >= 0 && !strncmp(user->nickname, name, fig_Configuration.nickLen)){
                     pthread_mutex_unlock(&user->userMutex);
                     return user;
             }
@@ -95,11 +95,18 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 
     //Set user's data
     memset(user, 0, sizeof(struct usr_UserData));
-    strncpy(user->nickname, name, NICKNAME_LENGTH);
+	// Allocate necesary data for the user's nickname
+	user->nickname = calloc(fig_Configuration.nickLen, sizeof(char));
+	if(user->nickname == NULL){
+		log_logError("Error allocating user memory", ERROR);
+		return NULL;
+	}
     memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 	usr_changeUserMode(user, '+', 'r');
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;
+	// Do this last to ensure user isn't selected before it is ready to be used
+    strncpy(user->nickname, name, fig_Configuration.nickLen);
 
     return user;
 }
@@ -108,6 +115,9 @@ int usr_deleteUser(struct usr_UserData *user){
     // Nothing new will be sent to queue
     pthread_mutex_lock(&user->userMutex);
     user->id = -1; // -1 means invalid user
+	if(user->nickname != NULL){
+		free(user->nickname);
+	}
     pthread_mutex_unlock(&user->userMutex);
 
     // Remove all pending messages

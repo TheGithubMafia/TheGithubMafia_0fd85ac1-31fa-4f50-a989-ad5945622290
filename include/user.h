@@ -3,7 +3,6 @@
 
 #include "chat.h"
 
-#define NICKNAME_LENGTH 21 // Includes null character '\0'
 #define UNREGISTERED_NAME "unreg"
 
 // Data about an user
@@ -15,15 +14,15 @@ struct usr_UserData {
 	int id;
 	char modes[5];
 	struct com_SocketInfo socketInfo;	
-	char nickname[NICKNAME_LENGTH];
+	char *nickname;
 	pthread_mutex_t userMutex;
 };
 
 // Fills in buffer with selected user's nickname
-int usr_getNickname(char buff[NICKNAME_LENGTH], struct usr_UserData *user);
+int usr_getNickname(char *buff, struct usr_UserData *user);
 
 //Get a user by name
-struct usr_UserData *usr_getUserByName(char name[NICKNAME_LENGTH]);
+struct usr_UserData *usr_getUserByName(char *name);
 
 //Get a user by id
 struct usr_UserData *usr_getUserById(int id);

@@ -176,13 +176,13 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply){
 
     struct usr_UserData *otherUser = usr_getUserByName(cmd->params[0]);
     if(otherUser == NULL) { // No other user has this name
-		char oldName[NICKNAME_LENGTH];
+		char oldName[fig_Configuration.nickLen];
 		usr_getNickname(oldName, user);
 		int isUnreg = usr_userHasMode(user, 'r');
 
 		// Set the name in the user's buffer
         pthread_mutex_lock(&user->userMutex);
-        strncpy(user->nickname, cmd->params[0], NICKNAME_LENGTH-1);
+        strncpy(user->nickname, cmd->params[0], fig_Configuration.nickLen-1);
         pthread_mutex_unlock(&user->userMutex);
 
         params[0] = cmd->params[0];
@@ -238,7 +238,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
     // Success
-    char nickname[NICKNAME_LENGTH];
+    char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
 
     params[0] = cmd->params[0];
@@ -289,7 +289,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
     // Success
-    char nickname[NICKNAME_LENGTH];
+    char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
     params[0] = cmd->params[0];
 
@@ -330,7 +330,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
     // Success
-    char nickname[NICKNAME_LENGTH+1];
+    char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
     char names[ARRAY_SIZE(cmd->params[0])];
     chan_getUsersInChannel(channel, names, ARRAY_SIZE(names));
@@ -366,7 +366,7 @@ int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
     // Success
-    char nickname[NICKNAME_LENGTH];
+    char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
     params[0] = cmd->params[0];
     size = 1;
@@ -396,7 +396,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
     // Success
-    char nickname[NICKNAME_LENGTH];
+    char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
     params[0] = cmd->params[0];
 	params[1] = cmd->params[1];
@@ -490,7 +490,7 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
     struct usr_UserData *user = cmd->user;
 	struct link_Node *channel = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
-	char nickname[NICKNAME_LENGTH];
+	char nickname[fig_Configuration.nickLen];
 
 	// Default values
     params[0] = cmd->params[0];

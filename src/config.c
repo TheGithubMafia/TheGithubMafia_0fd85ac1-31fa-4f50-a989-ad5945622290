@@ -6,7 +6,7 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging", "numthreads", "numclients"};
+const char *options[] = {"port", "log", "enablelogging", "numthreads", "numclients", "nicklength"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration;
@@ -120,6 +120,17 @@ void fig_parseLine(char *line){
 				fig_Configuration.clients = 0;
 			}
 			break;
+
+		case 5:
+			//nicklen
+			errno = 0;
+			fig_Configuration.nickLen = strtol(words[1], NULL, 10);
+			if(errno != 0){
+				log_logError("Error converting string to int: nicklength", WARNING);
+				fig_Configuration.clients = 0;
+			}
+			break;
+
 	}
 }
 

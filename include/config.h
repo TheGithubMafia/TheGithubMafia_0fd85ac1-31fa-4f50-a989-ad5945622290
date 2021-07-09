@@ -18,6 +18,7 @@ struct fig_ConfigData {
 	int port;
 	int threadsIO, threadsDATA;
 	int clients;
+	int nickLen;
 };	
 
 // Struct to store all config data

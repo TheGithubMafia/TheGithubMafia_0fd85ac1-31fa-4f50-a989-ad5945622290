@@ -285,7 +285,7 @@ struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct
 // Will fill a string with a list of users
 int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     struct chan_Channel *channel = channelNode->data;
-    char nickname[NICKNAME_LENGTH];
+    char nickname[fig_Configuration.nickLen];
     int pos = 1;
 
     buff[0] = ':';

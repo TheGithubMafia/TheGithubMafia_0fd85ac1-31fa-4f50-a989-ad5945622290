@@ -18,6 +18,12 @@ int init_chat(){
             log_logMessage("Must have at least 1 data thread! Using 1 data thread", WARNING);
     }	
 
+    if(fig_Configuration.nickLen < 1){
+            fig_Configuration.nickLen = 9;
+            log_logMessage("Nicks must have at least one character! Using nick length of 9", WARNING);
+    }	
+
+	fig_Configuration.nickLen++; // Compensate for null byte '\0'
 	serverLists.max = fig_Configuration.clients;
 
     // Allocate threads for processing user input 
@@ -41,7 +47,7 @@ int init_chat(){
         return -1;
 	}
 
-	// Set id of all users to -1
+	// Set id of all users to -1, and set nick lengths
 	for (int i = 0; i < serverLists.max; i++){
 		serverLists.users[i].id = -1;
 	}
