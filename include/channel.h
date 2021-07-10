@@ -3,6 +3,7 @@
 
 #include "user.h"
 #include "chat.h"
+#include "security.h"
 
 struct chat_Group;
 
@@ -44,6 +45,15 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channel, char *
 void chan_changeChannelModeArray(char op, char mode, struct link_Node *channelNode);
 
 int chan_isChanMode(char mode);
+
+// Sets the channel's key
+char *chan_setKey(struct link_Node *channelNode, char *key);
+
+// Removes the channel's key if it is correct
+char *chan_removeKey(struct link_Node *channelNode, char *key);
+
+// Checks to see if a given key is equal to the current key
+int chan_checkKey(struct link_Node *channelNode, char *key);
 
 // Give or remove chan op or voice
 char *chan_giveChanPerms(struct link_Node *channelNode, struct usr_UserData *user, char op, int perm);

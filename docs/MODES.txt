@@ -4,7 +4,7 @@ USERS
 i - Makes the user appear offline
 o - User is an operator						May ONLY be set with OPER
 r - User is not registered					May ONLY be set with NICK
-a - Marked as away
+a - Marked as away							MAY ONLY be set with AWAY
 
 CHANNELS
 o - Give or remove chanop

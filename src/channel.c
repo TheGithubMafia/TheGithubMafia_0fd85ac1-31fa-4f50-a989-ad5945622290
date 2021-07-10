@@ -172,6 +172,11 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 				return ERR_NOSUCHNICK;
 			}
 			return chan_giveChanPerms(channelNode, user, op, perm);	
+
+		case 'k':
+			if(op == '+')
+				return chan_setKey(channelNode, data);
+			return chan_removeKey(channelNode, data);
 		
 		default: // No special action needed, simply add it to the array
 			chan_changeChannelModeArray(op, mode, channelNode);
@@ -216,6 +221,74 @@ int chan_isChanMode(char mode){
 	}
 	
 	return -1;
+}
+
+// Sets the channel's key
+char *chan_setKey(struct link_Node *channelNode, char *key){
+	struct chan_Channel *channel = channelNode->data;
+	if(channelNode == NULL || channel == NULL)
+		return ERR_UNKNOWNERROR;
+
+	if(key == NULL)
+		return ERR_NEEDMOREPARAMS;
+
+	if(chan_channelHasMode('k', channelNode) == 1)
+		return ERR_KEYSET;
+
+	pthread_mutex_lock(&channel->channelMutex);
+	strncpy(channel->key, key, ARRAY_SIZE(channel->key)-1);
+	pthread_mutex_unlock(&channel->channelMutex);
+
+	chan_changeChannelModeArray('+', 'k', channelNode);
+
+	return NULL;
+}
+
+char *chan_removeKey(struct link_Node *channelNode, char *key){
+	struct chan_Channel *channel = channelNode->data;
+	if(channelNode == NULL || channel == NULL)
+		return ERR_UNKNOWNERROR;
+
+	if(key == NULL)
+		return ERR_NEEDMOREPARAMS;
+
+	// If keys match, remove channel's key
+	pthread_mutex_lock(&channel->channelMutex);
+	if(sec_constantStrCmp(channel->key, key, ARRAY_SIZE(channel->key)-1) == 1){
+		channel->key[0] = '\0';
+	} else {
+		pthread_mutex_unlock(&channel->channelMutex);
+		return ERR_BADCHANNELKEY;
+	}
+	pthread_mutex_unlock(&channel->channelMutex);
+
+	chan_changeChannelModeArray('-', 'k', channelNode);
+
+	return NULL;
+}
+
+// Checks if key matches, if no key then automatically correct
+int chan_checkKey(struct link_Node *channelNode, char *key){
+	struct chan_Channel *channel = channelNode->data;
+	int ret = -1;
+	if(channelNode == NULL || channel == NULL)
+		return -1;
+
+	// No need to check if there is no key to validate
+	if(chan_channelHasMode('k', channelNode) == -1)
+		return 1;
+
+	if(key == NULL)
+		return -1;
+
+	// If keys match, remove channel's key
+	pthread_mutex_lock(&channel->channelMutex);
+	if(sec_constantStrCmp(channel->key, key, ARRAY_SIZE(channel->key)-1) == 1){
+		ret = 1;
+	}
+	pthread_mutex_unlock(&channel->channelMutex);
+
+	return ret;
 }
 
 // Remove or give chan op or voice

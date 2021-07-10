@@ -266,6 +266,8 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
 	int newChannel = -1;
+    char nickname[fig_Configuration.nickLen];
+    usr_getNickname(nickname, user);
     
     if(cmd->params[0][0] != '#'){
         params[0] = (char *) invalidChanName;
@@ -282,10 +284,21 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
            return -2; // Add better error later
         }
 
+		if(cmd->paramCount > 1)
+			chan_setKey(channel, cmd->params[1]);	
+
         char msg[100] = "Created new channel: ";
         strncat(msg, cmd->params[0], ARRAY_SIZE(msg) - strlen(msg) - 1);
         log_logMessage(msg, INFO);
     }
+
+	// Make sure key is valid
+	if(chan_checkKey(channel, cmd->params[1]) == -1){
+		params[1] = cmd->params[0];
+		params[0] = nickname;
+		chat_createMessage(reply, user, thisServer, ERR_BADCHANNELKEY, params, 2);
+		return -1;
+	}
 
     struct chan_ChannelUser *chanUser = chan_addToChannel(channel, user); // Check for error
 	if(newChannel == 1){
@@ -293,10 +306,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
     // Success
-    char nickname[fig_Configuration.nickLen];
-    usr_getNickname(nickname, user);
     params[0] = cmd->params[0];
-
     chat_createMessage(reply, user, nickname, "JOIN", params, 1);
     chan_sendChannelMessage(reply, channel);
 
@@ -446,8 +456,8 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 			return -1;
 		}
 
-		// May not set themselves as OP or registered
-		if(isChan == -1 && op == '+' && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r')){
+		// May not set themselves as OP or registered or away
+		if(isChan == -1 && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r' || cmd->params[1][i] == 'a')){
 			return 2; // Say nothing
 		}
 	}
@@ -495,6 +505,7 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	struct link_Node *channel = NULL;
     char *params[ARRAY_SIZE(cmd->params)];
 	char nickname[fig_Configuration.nickLen];
+	usr_getNickname(nickname, user);
 
 	// Default values
     params[0] = cmd->params[0];
@@ -508,15 +519,17 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 
 	// Set all the modes
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+		//TODO - multiple data for multiple flags
 		char *ret = chan_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
 		if(ret != NULL){
-			params[0] = params[2]; // Problematic value
+			params[0] = nickname;
+			params[1] = params[2]; // Problematic value
 			chat_createMessage(reply, user, thisServer, ret, params, 1);
 			return -1;
 		}
 	}
 
-	usr_getNickname(nickname, user);
 	chat_createMessage(reply, user, nickname, "MODE", params, 3);
-	return 1;
+    chan_sendChannelMessage(reply, channel);
+	return 2;
 }
