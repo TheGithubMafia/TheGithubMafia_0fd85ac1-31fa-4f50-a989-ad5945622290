@@ -12,7 +12,6 @@
 #include "channel.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
-#define GROUP_NAME_LENGTH 201
 
 /*  Note about the structure of the users
     All new users are added to the main linked
@@ -33,7 +32,7 @@ struct chat_ServerLists {
 // New feature: A group a channels that a user can join
 // All at once, and an operator has full control over all
 struct chat_Group {
-    char name[GROUP_NAME_LENGTH];
+    char *name;
     struct link_List channels;
     pthread_mutex_t groupMutex;
 };

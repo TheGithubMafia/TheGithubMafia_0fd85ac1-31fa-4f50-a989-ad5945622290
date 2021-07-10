@@ -26,7 +26,7 @@ int chan_removeUserFromChannel(struct link_Node *channelNode, struct usr_UserDat
     struct chan_Channel *channel = channelNode->data;
     int ret = -1;
 
-    if(channel == NULL || user == NULL || user->id < 0){
+    if(channel == NULL || user == NULL){
         log_logMessage("Cannot remove user from channel", DEBUG);
         return -1;
     }
@@ -76,7 +76,7 @@ struct link_Node *chan_getChannelByName(char *name){
             channel = node->data;
             pthread_mutex_lock(&channel->channelMutex);
 
-            if(!strncmp(channel->name, name, CHANNEL_NAME_LENGTH)){
+            if(!strncmp(channel->name, name, fig_Configuration.chanNameLength)){
                     pthread_mutex_unlock(&channel->channelMutex);
                     pthread_mutex_unlock(&serverLists.channelsMutex);
                     return node;
@@ -100,13 +100,14 @@ struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
 
     struct chan_Channel *channel;
     channel = malloc(sizeof(struct chan_Channel));
-    if(channel == NULL){
+	channel->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
+    if(channel == NULL || channel->name == NULL){
         log_logError("Error creating channel", ERROR);
         return NULL;
     }
 
     // TODO - make sure name is legal
-    strncpy(channel->name, name, CHANNEL_NAME_LENGTH);
+    strncpy(channel->name, name, fig_Configuration.chanNameLength);
 
 	// Setup array of users with default size of 10
 	channel->max = 10;

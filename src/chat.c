@@ -12,38 +12,30 @@ struct chat_ServerLists serverLists;
 struct chat_DataQueue dataQueue;
 
 int init_chat(){
-    //Check that the config data is correct
-    if(fig_Configuration.threadsDATA < 1){
-            fig_Configuration.threadsDATA = 1;
-            log_logMessage("Must have at least 1 data thread! Using 1 data thread", WARNING);
-    }	
-
-    if(fig_Configuration.nickLen < 1){
-            fig_Configuration.nickLen = 9;
-            log_logMessage("Nicks must have at least one character! Using nick length of 9", WARNING);
-    }	
-
-	fig_Configuration.nickLen++; // Compensate for null byte '\0'
+	// Compensate for null byte '\0'
+	fig_Configuration.nickLen++; 
+	fig_Configuration.groupNameLength++;
+	fig_Configuration.chanNameLength++;
 	serverLists.max = fig_Configuration.clients;
 
     // Allocate threads for processing user input 
     dataQueue.threads = calloc(fig_Configuration.threadsDATA, sizeof(pthread_t)); 
     if (dataQueue.threads == NULL){
-        log_logError("Error initalizing dataQueue.threads", ERROR);
+        log_logError("Error initalizing dataQueue.threads.", ERROR);
         return -1;
     }
     
     // Initalize mutex to prevent locking issues
     int ret = pthread_mutex_init(&dataQueue.queueMutex, NULL);
     if (ret < 0){
-        log_logError("Error initalizing pthread_mutex", ERROR);
+        log_logError("Error initalizing pthread_mutex.", ERROR);
         return -1;
     }
 
 	// Allocate users array
 	serverLists.users = calloc(fig_Configuration.clients, sizeof(struct usr_UserData));
 	if(serverLists.users == NULL){
-        log_logError("Error initalizing users list", ERROR);
+        log_logError("Error initalizing users list.", ERROR);
         return -1;
 	}
 

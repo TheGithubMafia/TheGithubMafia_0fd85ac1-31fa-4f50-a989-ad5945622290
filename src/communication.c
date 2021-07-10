@@ -34,21 +34,10 @@ int init_server(){
         }
     }
 
-    //Check that the config data is correct
-    if(fig_Configuration.threadsIO < 1){
-        fig_Configuration.threadsIO = 1;
-        log_logMessage("Must have at least 1 IO thread! Using 1 IO thread", WARNING);
-    }	
-
-    if(fig_Configuration.clients <= 0){
-        fig_Configuration.clients = 20;
-        log_logMessage("Max clients must be at least 1! Using 20 clients", WARNING);
-    }
-
     // Allocate memory based on size from configuration
     clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
     if (clientList == NULL) {
-        log_logError("Error initalizing clientList", ERROR);
+        log_logError("Error initalizing clientList.", ERROR);
         return -1;
     }
 
@@ -56,7 +45,7 @@ int init_server(){
     for (int i = 0; i < fig_Configuration.threadsIO; i++){
         int ret = pthread_mutex_init(&clientList[i].jobs.queueMutex, NULL);
         if (ret < 0){
-            log_logError("Error initalizing pthread_mutex", ERROR);
+            log_logError("Error initalizing pthread_mutex.", ERROR);
             return -1;
         }
     }

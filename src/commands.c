@@ -2,7 +2,7 @@
 
 struct cmd_CommandList cmd_commandList;
 struct chat_Message cmd_unknownCommand;
-char *thisServer = "roundtable.example.com"; 
+char *thisServer = "example.boundless.chat"; 
 
 // Common reply messages
 const char *invalidChanName = ":Invalid channel name";
@@ -11,9 +11,13 @@ int init_commands() {
     // Initalize mutex to prevent locking issues
     int ret = pthread_mutex_init(&cmd_commandList.commandMutex, NULL);
     if (ret < 0){
-        log_logError("Error initalizing pthread_mutex", ERROR);
+        log_logError("Error initalizing pthread_mutex.", ERROR);
         return -1;
     }
+
+	if(fig_Configuration.serverName[0] != '\0'){
+		thisServer = fig_Configuration.serverName;
+	}
 
     // Init cmd_unknownCommand
     char *params[] = {":Unknown command: "};
@@ -30,7 +34,7 @@ int init_commands() {
     cmd_addCommand("KICK", 2, 1, &cmd_kick);
     cmd_addCommand("MODE", 2, 1, &cmd_mode);
 
-    log_logMessage("Successfully initalized commands", INFO);
+    log_logMessage("Successfully initalized commands.", INFO);
     return 1;
 }
 

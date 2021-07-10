@@ -4,8 +4,6 @@
 #include "user.h"
 #include "chat.h"
 
-#define CHANNEL_NAME_LENGTH 201
-
 struct chat_Group;
 
 // Data about a user specific to a channel
@@ -18,7 +16,7 @@ struct chan_Channel {
 	int id;
 	int max;
 	char modes[5];
-	char name[CHANNEL_NAME_LENGTH];
+	char *name;
 	char key[20];
 	struct chan_ChannelUser *users;
 	pthread_mutex_t channelMutex;

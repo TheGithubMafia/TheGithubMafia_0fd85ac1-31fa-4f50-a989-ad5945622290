@@ -6,10 +6,21 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging", "numthreads", "numclients", "nicklength"};
+const char *options[] = {"port", "log", "enablelogging", "numiothreads", "numdatathreads", "numclients", "nicklength", "servername", "channelnamelength", "groupnamelength"};
 
 // Struct to store all config data
-struct fig_ConfigData fig_Configuration;
+struct fig_ConfigData fig_Configuration = {
+	.logDirectory = "/var/log/boundless-server",
+	.serverName = "example.boundless.chat",
+	.useFile = 0,
+	.port = 6667,
+	.threadsIO = 1,
+	.threadsDATA = 1,
+	.clients = 20,
+	.nickLen = 10,
+	.chanNameLength = 200,
+	.groupNameLength = 200
+};
 
 int init_config(char *dir){
     fig_readConfig(dir);
@@ -54,7 +65,7 @@ int fig_splitWords(char *line, char words[10][MAX_STRLEN]){
 	return word;
 }
 
-void fig_parseLine(char *line){
+void fig_parseLine(char *line, int lineNo){
 	char words[10][MAX_STRLEN];		
 	int numWords = fig_splitWords(line, words);
 
@@ -71,20 +82,17 @@ void fig_parseLine(char *line){
 	}
 
 	//Execute based on the string's value (value is equal to index in option)
+	errno = 0;
+	int *val;
 	switch (option) {
-		case 0:
-			//port
-			errno = 0;
-			fig_Configuration.port = strtol(words[1], NULL, 10);
-			if(errno != 0){
-				log_logError("Error converting string to int: port", WARNING);
-				fig_Configuration.port = 0;
-			}
-			break;
-
 		case 1:
 			//log
 			strncpy(fig_Configuration.logDirectory, words[1], ARRAY_SIZE(fig_Configuration.logDirectory));
+			break;
+
+		case 7:
+			//serverName
+			strncpy(fig_Configuration.serverName, words[1], ARRAY_SIZE(fig_Configuration.serverName));
 			break;
 
 		case 2:
@@ -98,37 +106,42 @@ void fig_parseLine(char *line){
 			break;
 
 		case 3:
-			//num threads
-			errno = 0;
-            int totalThreads = strtol(words[1], NULL, 10);
-            // Half threads for each, except IO gets the remainder
-			fig_Configuration.threadsIO = (totalThreads / 2) + (totalThreads % 2); 
-			fig_Configuration.threadsDATA = (totalThreads / 2); 
-			if(errno != 0){
-				log_logError("Error converting string to int: threads", WARNING);
-				fig_Configuration.threadsIO = 0;
-				fig_Configuration.threadsDATA = 0;
-			}
-			break;
+			//num io threads
+			val = &fig_Configuration.threadsIO;
+			goto edit_int;
 
 		case 4:
-			//max clients
-			errno = 0;
-			fig_Configuration.clients = strtol(words[1], NULL, 10);
-			if(errno != 0){
-				log_logError("Error converting string to int: clients", WARNING);
-				fig_Configuration.clients = 0;
-			}
-			break;
+			//num data threads
+			val = &fig_Configuration.threadsDATA;
+			goto edit_int;
+
+		case 0:
+			//port
+			val = &fig_Configuration.port;
+			goto edit_int;
 
 		case 5:
+			//max clients
+			val = &fig_Configuration.clients;
+			goto edit_int;
+
+		case 6:
 			//nicklen
-			errno = 0;
-			fig_Configuration.nickLen = strtol(words[1], NULL, 10);
-			if(errno != 0){
-				log_logError("Error converting string to int: nicklength", WARNING);
-				fig_Configuration.clients = 0;
-			}
+			val = &fig_Configuration.nickLen;
+			goto edit_int;
+
+		case 8:
+			//chanNameLength
+			val = &fig_Configuration.chanNameLength;
+			goto edit_int;
+
+		case 9:
+			//groupNameLength
+			val = &fig_Configuration.groupNameLength;
+			goto edit_int;
+
+		edit_int:
+			fig_editConfigInt(val, words[1], lineNo);	
 			break;
 
 	}
@@ -145,10 +158,34 @@ int fig_readConfig(char *path){
 
 	//read through every line
 	char buff[BUFSIZ];
+	int lineNo = 0;
 	while(fgets(buff, ARRAY_SIZE(buff), file)){
-		fig_parseLine(buff);
+		fig_parseLine(buff, lineNo);
+		lineNo++;
 	}
 
 	fclose(file);
 	return 0;
+}
+
+// Will edit the given config int value based on the given value and determine if is valid
+int fig_editConfigInt(int *orig, char *str, int lineNo){
+	errno = 0;
+	int val = strtol(str, NULL, 10);
+	char buff[100];
+
+	if(errno != 0){
+		snprintf(buff, ARRAY_SIZE(buff), "Line %d: Error converting string to int!", lineNo);
+		log_logError(buff, WARNING);
+		return -1;
+	}
+
+	if(val <= 0){
+		snprintf(buff, ARRAY_SIZE(buff), "Line %d: %d is invalid, using default %d.", lineNo, val, *orig);
+		log_logError(buff, WARNING);
+		return -1;
+	}
+
+	*orig = val; // Success
+	return 1;
 }
