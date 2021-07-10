@@ -6,7 +6,7 @@ An official client has not yet been released but you may use telnet or similar t
 Simply connect to either Boundless.Chat at port 6667 or another custom instance.
 
 ## Installation
-**Note:** This is currently untested for both MacOS and Windows
+**Note:** This is currently untested for both MacOS and Windows.
 ```sh
 git clone https://github.com/hooperwf1/Boundless.Chat-Server.git
 cd Boundless.Chat-Server
