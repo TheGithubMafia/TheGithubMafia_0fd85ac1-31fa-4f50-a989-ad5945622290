@@ -106,6 +106,13 @@ struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
         return NULL;
     }
 
+    // Initalize mutex to prevent locking issues
+    int ret = pthread_mutex_init(&channel->channelMutex, NULL);
+    if (ret < 0){
+        log_logError("Error initalizing pthread_mutex.", ERROR);
+        return NULL;
+    }
+
     // TODO - make sure name is legal
     strncpy(channel->name, name, fig_Configuration.chanNameLength);
 

@@ -235,7 +235,7 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
         if(channel == NULL)
 			return -1;
 
-		if(chan_channelHasMode('m', channel) && chan_getUserChannelPrivs(user, channel) < 1){
+		if(chan_channelHasMode('m', channel) == 1 && chan_getUserChannelPrivs(user, channel) < 1){
 			chat_createMessage(reply, user, thisServer, ERR_CANNOTSENDTOCHAN, params, 1);
 			return -1;
 		}
