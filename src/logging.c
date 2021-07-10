@@ -114,6 +114,7 @@ int log_logToFile(char* msg, int type){
 		log_editConfig(0, log_LoggingConfig.directory);
 		return -1;
 	}
+	fflush(log_LogFile);
 
 	return 0;
 }

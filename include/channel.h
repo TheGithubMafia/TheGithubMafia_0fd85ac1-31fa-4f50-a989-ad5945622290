@@ -10,7 +10,7 @@ struct chat_Group;
 // Data about a user specific to a channel
 struct chan_ChannelUser {
 	struct usr_UserData *user;
-	int permLevel; // 0 - Default, 1 - chanvoice, 2 - chanop
+	int permLevel; // 0 - Default, 1 - chanvoice, 2 - chanop, 3 - groupop
 };
 
 struct chan_Channel {
