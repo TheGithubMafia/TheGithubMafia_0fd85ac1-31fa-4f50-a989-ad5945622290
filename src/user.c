@@ -112,12 +112,14 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 }
 
 int usr_deleteUser(struct usr_UserData *user){
+	if(user == NULL)
+		return -1;
+
     // Nothing new will be sent to queue
     pthread_mutex_lock(&user->userMutex);
     user->id = -1; // -1 means invalid user
-	if(user->nickname != NULL){
+	if(user->nickname != NULL)
 		free(user->nickname);
-	}
     pthread_mutex_unlock(&user->userMutex);
 
     // Remove all pending messages

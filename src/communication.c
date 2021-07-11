@@ -66,7 +66,7 @@ void com_close(){
 
 // Make a new job and insert it into the queue for sending
 int com_sendStr(struct usr_UserData *user, char *msg){
-    struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
+    struct com_QueueJob *job = calloc(1, sizeof(struct com_QueueJob));
     job->user = user;
 
     snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
@@ -215,6 +215,51 @@ int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
     return -1;
 }
 
+// Will read data from the socket and properly send it for processing
+int com_readFromSocket(int sockfd){
+	struct usr_UserData *user = usr_getUserBySocket(sockfd);
+	if(user == NULL)
+		return -1;
+
+	char buff[BUFSIZ] = {0};
+	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
+	switch(bytes){
+		case 0:
+			log_logMessage("Client disconnect.", INFO);
+			goto disconnect_client; // Fallthrough minus the logging part
+		case 1:
+			log_logError("Error reading from client.", WARNING);
+		disconnect_client:
+			usr_deleteUser(user);
+			break;
+
+		default:
+			// Split up each line into its own job
+			int loc = 0;
+			struct com_QueueJob *job;
+			while(loc >= 0){
+				int oldLoc = loc;
+				job = calloc(1, sizeof(struct com_QueueJob));
+				if(job == NULL){
+						log_logError("Error creating job.", DEBUG);
+						continue;
+				}
+				job->user = user;
+				job->type = 0; // Use string
+
+				// Split each line into its own job
+				loc = chat_findEndLine(buff, ARRAY_SIZE(buff), loc);
+				if(loc > -1)
+					buff[loc - 1] = '\0';
+				strncpy(job->str, &buff[oldLoc], ARRAY_SIZE(job->str)-1);
+				chat_insertQueue(job);
+			}
+	}
+
+	return 1;
+}
+
+// TODO - clean this mess of a method up
 void *com_communicateWithClients(void *param){
     struct com_ClientList *clientList = param;
     struct timespec delay = {.tv_nsec = 1000000}; // 1ms
@@ -227,7 +272,7 @@ void *com_communicateWithClients(void *param){
     // Settings for each pollfd struct
     for(int x = 0; x < clientList->maxClients; x++){
         clientList->clients[x].fd = -1;
-        clientList->clients[x].events = POLLIN | POLLHUP | POLLOUT;
+        clientList->clients[x].events = POLLIN | POLLOUT;
     }
 
     struct usr_UserData *user;
@@ -239,44 +284,18 @@ void *com_communicateWithClients(void *param){
             for(int i = 0; i < clientList->maxClients; i++){
                 struct com_QueueJob *job;
                 int sockfd = clientList->clients[i].fd;
-                if(clientList->clients[i].revents & POLLERR){
-                    log_logMessage("Client error", WARNING);
-                    close(clientList->clients[i].fd);
-                    clientList->clients[i].fd = -1;
-                    clientList->connected--;
-
-                } else if (clientList->clients[i].revents & POLLHUP){
-                    log_logMessage("Client closed connection", INFO);
-                    close(clientList->clients[i].fd);
-                    clientList->clients[i].fd = -1;
-                    clientList->connected--;
+                if(clientList->clients[i].revents & POLLERR || clientList->clients[i].revents & POLLHUP){
+                    log_logMessage("Client closed connection.", WARNING);
+					// Delete this user
+					user = usr_getUserBySocket(sockfd);
+					pthread_mutex_unlock(&clientList->clientListMutex);
+					usr_deleteUser(user);
 
                 } else if (clientList->clients[i].revents & POLLIN){
-                    user = usr_getUserBySocket(sockfd);
-                    job = malloc(sizeof(struct com_QueueJob));
-                    if(job == NULL){
-                            log_logError("Error creating job", DEBUG);
-                            continue;
-                    }
-                    job->user = user;
-                    job->type = 0; // Use string
+					
+					pthread_mutex_unlock(&clientList->clientListMutex);
+					com_readFromSocket(sockfd);
 
-                    int bytes = read(sockfd, job->str, ARRAY_SIZE(job->str));
-                    job->str[bytes] = '\0';
-                    if(bytes <= 0){
-                        free(job);
-                        if(bytes == 0){
-                            log_logMessage("Client disconnect", INFO);
-                        } else if(bytes == -1){
-                            log_logError("Error reading from client", WARNING);
-                        }
-
-                        pthread_mutex_unlock(&clientList->clientListMutex);
-                        usr_deleteUser(user);
-                        pthread_mutex_lock(&clientList->clientListMutex);
-                    } else {
-                        chat_insertQueue(job);
-                    }
                 } else if (clientList->clients[i].revents & POLLOUT){
                     int jobLoc = com_hasJob(&clientList->jobs, clientList->clients[i].fd);
 
@@ -288,6 +307,7 @@ void *com_communicateWithClients(void *param){
                         pthread_mutex_unlock(&clientList->jobs.queueMutex); 
 
                         if(user != NULL){
+							log_logMessage(job->str, MESSAGE);
                             write(user->socketInfo.socket, job->str, strlen(job->str));
                         }
                         free(job);

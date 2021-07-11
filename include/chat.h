@@ -72,6 +72,9 @@ int chat_insertQueue(struct com_QueueJob *job);
 // to the communication queue for sending back to clients
 void *chat_processQueue(void *param);
 
+// Returns the location of either \n or \r
+int chat_findEndLine(char *str, int size, int starting);
+
 // Parse the input from a user and act on it
 int chat_parseInput(struct com_QueueJob *job);
 

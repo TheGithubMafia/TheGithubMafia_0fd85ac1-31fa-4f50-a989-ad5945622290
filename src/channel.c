@@ -91,7 +91,6 @@ struct link_Node *chan_getChannelByName(char *name){
 }
 
 // Create a channel with the specified name
-// TODO - add further channel properties
 // TODO - error checking with link_List
 struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
     if(name[0] != '#'){
@@ -373,12 +372,16 @@ int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user != NULL){
-			if(channel->users[i].permLevel == 2){ // Channel operator
-				strncat(buff, "@", size - pos - 1);
-				pos++;
-			} else if (channel->users[i].permLevel == 1){ // Channel voice
-				strncat(buff, "+", size - pos - 1);
-				pos++;
+			switch(channel->users[i].permLevel) {
+				case 2: // Channel operator
+					strncat(buff, "@", size - pos - 1);
+					pos++;
+					break;
+
+				case 1: // Channel operator
+					strncat(buff, "+", size - pos - 1);
+					pos++;
+					break;
 			}
 
 			usr_getNickname(nickname, channel->users[i].user);

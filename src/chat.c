@@ -60,12 +60,12 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     for (int i = 0; i < numThreads; i++){
         ret = pthread_create(&dataQueue.threads[i], NULL, chat_processQueue, &dataQueue);
         if (ret < 0){
-            log_logError("Error initalizing thread", ERROR);
+            log_logError("Error initalizing thread.", ERROR);
             return -1;
         }
     }
 
-    snprintf(buff, ARRAY_SIZE(buff), "Successfully processing data on %d threads", numThreads);
+    snprintf(buff, ARRAY_SIZE(buff), "Successfully processing data on %d threads.", numThreads);
     log_logMessage(buff, INFO);
 
     return numThreads;
@@ -124,6 +124,22 @@ void *chat_processQueue(void *param){
     }
 
     return NULL;
+}
+
+// Returns the ending location using either \n or \r
+int chat_findEndLine(char *str, int size, int starting){
+	int found = -1;
+	for(int i = starting; i < size; i++){
+		if(str[i] == '\0'){
+			return -1; // It is done
+		} else if(str[i] == '\n' || str[i] == '\r'){
+			found = 1; // Keep looping until reach the next 'normal' character
+		} else if(found == 1) {
+			return i;	
+		}
+	}
+
+	return -1;
 }
 
 // TODO - Support multiple cmds in one read
@@ -190,7 +206,7 @@ int chat_parseInput(struct com_QueueJob *job){
     cmd->user = user;
 
     // Create job to execute command
-    cmdJob = malloc(sizeof(struct com_QueueJob));
+    cmdJob = calloc(1, sizeof(struct com_QueueJob));
     if(cmdJob == NULL){
             log_logError("Error creating job", DEBUG);
             free(cmd);

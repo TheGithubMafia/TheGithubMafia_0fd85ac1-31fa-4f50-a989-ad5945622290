@@ -81,6 +81,9 @@ int com_hasSocket(int socket, struct com_ClientList *cliList);
 //Find first avaliable job in the queue that the thread can use
 int com_hasJob(struct com_DataQueue *dataQ, int sockfd);
 
+// Will read data from the socket and properly send it for processing
+int com_readFromSocket(int sockfd);
+
 // Handle all incoming data from the client
 void *com_communicateWithClients(void *param);
 
