@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include <poll.h>
+#include <sys/epoll.h>
 #include <limits.h>
 #include <time.h>
 #include "logging.h"
@@ -40,18 +40,8 @@ struct com_QueueJob {
 //struct to store data about the socket, and its file descriptor
 struct com_SocketInfo {
     int socket;
+	int socket2; // Used for filtering epoll writing events
     struct sockaddr_storage addr;
-};
-
-//struct to store data about each thread's pollfd struct
-struct com_ClientList {
-    int maxClients;
-    int connected;
-    int threadNum;
-    struct pollfd *clients; /* pollfd array for poll() */
-    pthread_t thread;
-    pthread_mutex_t clientListMutex;
-    struct com_DataQueue jobs;
 };
 
 extern int com_serverSocket;
@@ -66,39 +56,32 @@ void com_close();
 int com_sendStr(struct usr_UserData *user, char *msg);
 
 // Remove all user jobs from queue
-int com_cleanQueue(struct usr_UserData *user, int sock);
+int com_cleanQueue(struct usr_UserData *user);
 
-// Insert selected job into the correct queue for processing
+// Insert selected job into the queue
 int com_insertQueue(struct com_QueueJob *job);
 
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
 
-// Will determine if the specified socket fd is inside a pollfd struct
-// For use inside inside of a thread; Make sure to lock mutex if needed
-int com_hasSocket(int socket, struct com_ClientList *cliList);
-
 //Find first avaliable job in the queue that the thread can use
-int com_hasJob(struct com_DataQueue *dataQ, int sockfd);
+int com_hasJob(struct com_DataQueue *dataQ, struct usr_UserData *user);
 
 // Will read data from the socket and properly send it for processing
-int com_readFromSocket(int sockfd);
+int com_readFromSocket(struct epoll_event *userEvent, int epollfd);
+
+// Writes avaliable queue data to socket
+int com_writeToSocket(struct epoll_event *userEvent, int epollfd);
 
 // Handle all incoming data from the client
 void *com_communicateWithClients(void *param);
-
-// Will close the client's socket
-int com_removeClient(int sock);
-
-// Place a new client into a pollfd struct
-int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads);
 
 // Setup the threads to start listening for incoming communication and send
 // outbound data to clients
 int com_setupIOThreads(struct fig_ConfigData *config);
 
-//accept and handle all communication with clients
-int com_acceptClients();
+//accept communication with clients
+int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock);
 
 //start server socket based on configuration
 int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* sockAddr, int forceIPv4);

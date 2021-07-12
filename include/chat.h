@@ -22,6 +22,7 @@
 */
 struct chat_ServerLists {
 	int max;
+	int connected;
 	struct usr_UserData *users;
 	struct link_List groups;	
 	pthread_mutex_t groupsMutex;
@@ -60,6 +61,8 @@ extern struct chat_ServerLists serverLists;
 int init_chat();
 
 void chat_close();
+
+int chat_serverIsFull();
 
 // Setup threads for data processing
 int chat_setupDataThreads(struct fig_ConfigData *config);

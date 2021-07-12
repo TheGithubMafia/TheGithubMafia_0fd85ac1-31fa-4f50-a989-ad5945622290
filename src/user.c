@@ -101,7 +101,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 		log_logError("Error allocating user memory", ERROR);
 		return NULL;
 	}
-    memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
+	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 	usr_changeUserMode(user, '+', 'r');
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;
@@ -123,11 +123,13 @@ int usr_deleteUser(struct usr_UserData *user){
     pthread_mutex_unlock(&user->userMutex);
 
     // Remove all pending messages
-    com_cleanQueue(user, user->socketInfo.socket);
+    com_cleanQueue(user);
 
     // Remove socket
-    com_removeClient(user->socketInfo.socket);
+	close(user->socketInfo.socket);
     user->socketInfo.socket = -2; // Ensure that no data sent to wrong user
+	close(user->socketInfo.socket2);
+    user->socketInfo.socket2 = -2; // Ensure that no data sent to wrong user
 
     // Channels
     chan_removeUserFromAllChannels(user);

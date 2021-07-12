@@ -15,11 +15,13 @@
 #include "config.h"
 #include "chat.h"
 
-struct com_ClientList *clientList;
-
 struct com_SocketInfo serverSockAddr;
-int com_serverSocket = -1;
+pthread_t *threads;
+int com_serverSocket = -1, com_epollfd = -1;
 int com_numThreads = -1;
+struct usr_UserData *serverUser;
+
+struct com_DataQueue com_dataQ;
 
 extern struct chat_ServerLists serverLists;
 
@@ -34,20 +36,34 @@ int init_server(){
         }
     }
 
-    // Allocate memory based on size from configuration
-    clientList = calloc(fig_Configuration.threadsIO, sizeof(struct com_ClientList));
-    if (clientList == NULL) {
-        log_logError("Error initalizing clientList.", ERROR);
-        return -1;
-    }
+	// Create the epoll
+	com_epollfd = epoll_create1(0);
+	if(com_epollfd == -1){
+		log_logError("Error setting up epoll", FATAL);
+		return -1;
+	}
 
-    // Initalize queue mutex to prevent locking issues
-    for (int i = 0; i < fig_Configuration.threadsIO; i++){
-        int ret = pthread_mutex_init(&clientList[i].jobs.queueMutex, NULL);
-        if (ret < 0){
-            log_logError("Error initalizing pthread_mutex.", ERROR);
-            return -1;
-        }
+	// TODO deal with random users sending data to this user
+	serverUser = usr_createUser(&serverSockAddr, "SERVER");
+	if(!serverUser){
+		log_logMessage("Unable to create the SERVER user", ERROR);
+		return -1;
+	}
+
+	// Setup listening socket in the epoll	
+	struct epoll_event ev;
+	ev.events = EPOLLIN|EPOLLONESHOT;
+	ev.data.ptr = serverUser;
+	if(epoll_ctl(com_epollfd, EPOLL_CTL_ADD, com_serverSocket, &ev) == -1){
+		log_logError("Error adding listening socket to epoll", FATAL);
+		return -1;
+	}
+    
+    // Initalize mutex to prevent locking issues
+    int ret = pthread_mutex_init(&com_dataQ.queueMutex, NULL);
+    if (ret < 0){
+        log_logError("Error initalizing pthread_mutex.", ERROR);
+        return -1;
     }
 
     //Setup threads for listening
@@ -61,63 +77,57 @@ void com_close(){
         close(com_serverSocket);
     }
 
-    free(clientList);
+    free(threads);
 }
 
 // Make a new job and insert it into the queue for sending
 int com_sendStr(struct usr_UserData *user, char *msg){
+	if(user == NULL)
+		return -1;
+
     struct com_QueueJob *job = calloc(1, sizeof(struct com_QueueJob));
     job->user = user;
 
     snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
     com_insertQueue(job);
 
+	// Setup to allow for a write
+	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
+	ev.data.ptr = user;
+	if(epoll_ctl(com_epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
+		log_logError("Error rearming write socket", WARNING);
+		usr_deleteUser(user);
+		return -1;
+	}
+
     return 1;
 }
 
 // Will remove all instances of a user from the queue
-int com_cleanQueue(struct usr_UserData *user, int sock){
-    struct com_ClientList *cliList;
+int com_cleanQueue(struct usr_UserData *user){
     struct link_Node *node;
     struct com_QueueJob *job;
 
-    // Search thru each job list for each thread
-    for (int i = 0; i < com_numThreads; i++){
-        cliList = &clientList[i];
+	pthread_mutex_lock(&com_dataQ.queueMutex); 
 
-        pthread_mutex_lock(&cliList->clientListMutex); 
-        if(com_hasSocket(sock, cliList) >= 0){
-            pthread_mutex_lock(&cliList->jobs.queueMutex); 
+	int pos = 0;
+	for(node = com_dataQ.queue.head; node != NULL; node = node->next){
+		job = node->data;
+		if(job->user == user){
+			free(link_remove(&com_dataQ.queue, pos));
+			pos--; // List is one item shorter
+		}
 
-            int notFinished = 1;
-            while(notFinished){ // Restart search: item removed = list changes
-                int pos = 0;
-                notFinished = 0;
-                for(node = cliList->jobs.queue.head; node != NULL; node = node->next){
-                    job = node->data;
-                    if(job->user == user){
-                        free(link_remove(&cliList->jobs.queue, pos));
-                        notFinished = 1;
-                        break;
-                    }
+		pos++;
+	}
 
-                    pos++;
-                }
-            }
-
-            pthread_mutex_unlock(&cliList->jobs.queueMutex); 
-            pthread_mutex_unlock(&cliList->clientListMutex); 
-            return 1;
-        }
-
-        pthread_mutex_unlock(&cliList->clientListMutex); 
-    }
+	pthread_mutex_unlock(&com_dataQ.queueMutex); 
+	return 1;
 
     return -1;
 }
 
 int com_insertQueue(struct com_QueueJob *job){
-    struct com_ClientList *cliList = NULL;
     struct usr_UserData *user = job->user;
 
     if(!user || user->id == -1){ // User is disconnecting; nothing new to be sent
@@ -128,28 +138,12 @@ int com_insertQueue(struct com_QueueJob *job){
     // Guard to make sure user does not disconnect during this
     pthread_mutex_lock(&user->userMutex);
 
-    int sockfd = user->socketInfo.socket;
-
-    // Search through each pollfd struct to find the correct queue to insert job
-    for(int i = 0; i < fig_Configuration.threadsIO; i++) {
-        cliList = &clientList[i];
-
-        pthread_mutex_lock(&cliList->clientListMutex); 
-
-        if(com_hasSocket(sockfd, cliList) >= 0){
-            pthread_mutex_lock(&cliList->jobs.queueMutex); 
-            struct link_Node *ret = link_add(&cliList->jobs.queue, job);
-            if(ret == NULL){
-                log_logMessage("Error adding job to queue", WARNING);
-            }
-            pthread_mutex_unlock(&cliList->jobs.queueMutex); 
-
-            pthread_mutex_unlock(&cliList->clientListMutex); 
-            break;
-        }
-
-        pthread_mutex_unlock(&cliList->clientListMutex); 
-    }
+    pthread_mutex_lock(&com_dataQ.queueMutex);
+	struct link_Node *ret = link_add(&com_dataQ.queue, job);
+	if(ret == NULL){
+		log_logMessage("Error adding job to queue", WARNING);
+	}
+    pthread_mutex_unlock(&com_dataQ.queueMutex);
     pthread_mutex_unlock(&user->userMutex);
 
     return 1;
@@ -177,33 +171,18 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 	return 0;
 }
 
-// Will determine if the specified socket fd is inside a pollfd struct
-// For use inside of a thread; Make sure to lock this externally if needed
-int com_hasSocket(int socket, struct com_ClientList *cliList){
-    struct pollfd *conns = cliList->clients;
-    int size = cliList->maxClients;
-
-    for(int i = 0; i < size; i++){
-        if(conns[i].fd == socket){
-            return i;
-        }
-    }
-
-    return -1;
-}
-
 // Will return location of job if true, else -1
-int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
+int com_hasJob(struct com_DataQueue *dataQ, struct usr_UserData *user){
     struct link_Node *node = NULL;
-    struct usr_UserData *user = NULL;
     int loc = 0;
 
     pthread_mutex_lock(&dataQ->queueMutex); 
 
     for(node = dataQ->queue.head; node != NULL; node = node->next){
-        user = ((struct com_QueueJob *) node->data)->user;
+        struct usr_UserData *otherUser;
+		otherUser = ((struct com_QueueJob *) node->data)->user;
 
-        if(user->socketInfo.socket == sockfd){
+        if(user == otherUser){
             pthread_mutex_unlock(&dataQ->queueMutex); 
             return loc;
         }
@@ -216,13 +195,25 @@ int com_hasJob(struct com_DataQueue *dataQ, int sockfd){
 }
 
 // Will read data from the socket and properly send it for processing
-int com_readFromSocket(int sockfd){
-	struct usr_UserData *user = usr_getUserBySocket(sockfd);
-	if(user == NULL)
+int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
+	struct usr_UserData *user = userEvent->data.ptr;
+	if(user == NULL){
+		log_logMessage("No user associated with socket", ERROR);
 		return -1;
+	}
+	int sockfd = user->socketInfo.socket;
 
 	char buff[BUFSIZ] = {0};
 	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
+
+	// Rearm the fd because data has already been read
+	struct epoll_event ev = {.events = EPOLLIN|EPOLLONESHOT, .data.ptr = user};
+	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) == -1){
+		close(sockfd); // TODO delete user
+		log_logError("Error rearming socket", ERROR);
+		return -1;
+	}
+
 	switch(bytes){
 		case 0:
 			log_logMessage("Client disconnect.", INFO);
@@ -259,159 +250,103 @@ int com_readFromSocket(int sockfd){
 	return 1;
 }
 
+// Writes avaliable queue data to socket
+int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
+	struct usr_UserData *user = userEvent->data.ptr;
+	if(user == NULL){
+		log_logMessage("No user associated with socket", ERROR);
+		return -1;
+	}
+
+	int jobLoc = com_hasJob(&com_dataQ, user);
+	struct com_QueueJob *job;
+
+	if(jobLoc >= 0){
+		pthread_mutex_lock(&com_dataQ.queueMutex);
+		job = link_remove(&com_dataQ.queue, jobLoc);
+		pthread_mutex_unlock(&com_dataQ.queueMutex);
+
+		if(job == NULL)
+			return -1;
+
+		struct usr_UserData *user = job->user;
+		char buff[ARRAY_SIZE(job->str)];
+		strncpy(buff, job->str, ARRAY_SIZE(buff));
+		free(job);
+
+		if(user != NULL){
+			log_logMessage(buff, MESSAGE);
+			int ret = write(user->socketInfo.socket2, buff, strlen(buff));
+			if(ret == -1){
+				log_logError("Error writing to client", ERROR);
+				usr_deleteUser(user);
+				return -1;
+			}
+			
+			// Setup to allow for another write if avaliable
+			struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
+			ev.data.ptr = user;
+			if(epoll_ctl(epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
+				log_logError("Error rearming write socket", WARNING);
+				usr_deleteUser(user);
+				return -1;
+			}
+		}
+	}
+	
+	return 0;
+}
+
 // TODO - clean this mess of a method up
 void *com_communicateWithClients(void *param){
-    struct com_ClientList *clientList = param;
-    struct timespec delay = {.tv_nsec = 1000000}; // 1ms
-    int ret;
+    int *epollfd = param;
+	struct usr_UserData *user;
 
-    // Initalize the pollfd struct array
-    struct pollfd connections[clientList->maxClients];
-    clientList->clients = connections;
-
-    // Settings for each pollfd struct
-    for(int x = 0; x < clientList->maxClients; x++){
-        clientList->clients[x].fd = -1;
-        clientList->clients[x].events = POLLIN | POLLOUT;
-    }
-
-    struct usr_UserData *user;
+	// First is options, second is storage
+	struct epoll_event events[10];
+    int num;
+	
     while(1){
-        pthread_mutex_lock(&clientList->clientListMutex);
+        num = epoll_wait(*epollfd, events, ARRAY_SIZE(events), -1); 
+		if(num == -1){
+			if(num == EINTR)
+				continue; // OK to continue
 
-        ret = poll(clientList->clients, clientList->maxClients, 50);
-        if(ret != 0){
-            for(int i = 0; i < clientList->maxClients; i++){
-                struct com_QueueJob *job;
-                int sockfd = clientList->clients[i].fd;
-                if(clientList->clients[i].revents & POLLERR || clientList->clients[i].revents & POLLHUP){
-                    log_logMessage("Client closed connection.", WARNING);
-					// Delete this user
-					user = usr_getUserBySocket(sockfd);
-					pthread_mutex_unlock(&clientList->clientListMutex);
-					usr_deleteUser(user);
+			log_logError("epoll_wait", ERROR);
+			exit(EXIT_FAILURE);
+		}
 
-                } else if (clientList->clients[i].revents & POLLIN){
-					
-					pthread_mutex_unlock(&clientList->clientListMutex);
-					com_readFromSocket(sockfd);
+		for(int i = 0; i < num; i++){
+			user = events[i].data.ptr;
+			if(user == serverUser){
+				com_acceptClient(&serverSockAddr, *epollfd);
+				continue;
+			}
 
-                } else if (clientList->clients[i].revents & POLLOUT){
-                    int jobLoc = com_hasJob(&clientList->jobs, clientList->clients[i].fd);
-
-                    // User is in job list
-                    if(jobLoc >= 0){
-                        pthread_mutex_lock(&clientList->jobs.queueMutex); 
-                        job = link_remove(&clientList->jobs.queue, jobLoc);
-                        user = job->user;
-                        pthread_mutex_unlock(&clientList->jobs.queueMutex); 
-
-                        if(user != NULL){
-							log_logMessage(job->str, MESSAGE);
-                            write(user->socketInfo.socket, job->str, strlen(job->str));
-                        }
-                        free(job);
-                    }
-                }
-            }
-        } else if (ret < 0) {
-            log_logError("Error with poll()", ERROR);
-            exit(EXIT_FAILURE);
-        }
-
-        pthread_mutex_unlock(&clientList->clientListMutex);
-        nanosleep(&delay, NULL); // Allow other threads time to access mutex
+			if(events[i].events & EPOLLIN){
+				com_readFromSocket(&events[i], *epollfd);
+			} else if (events[i].events & EPOLLOUT){
+				com_writeToSocket(&events[i], *epollfd);
+			} // Add disconnection/error
+		}
     }
     
     return NULL;
-}
-
-// Remove a client from polling and close the socket
-int com_removeClient(int sock){
-    struct com_ClientList *currentList;
-
-    for(int i = 0; i < com_numThreads; i++){
-        currentList = &clientList[i];
-
-        pthread_mutex_lock(&currentList->clientListMutex);
-        for(int x = 0; x < currentList->maxClients; x++){
-            // Match
-            if(currentList->clients[x].fd == sock){
-                close(currentList->clients[x].fd);
-                currentList->clients[x].fd = -1;
-                currentList->connected--;
-                pthread_mutex_unlock(&currentList->clientListMutex);
-                return 1;
-            }
-        }
-        pthread_mutex_unlock(&currentList->clientListMutex);
-    }
-
-    return -1;
-}
-
-//Place a client into one of the poll arrays
-int com_insertClient(struct com_SocketInfo addr, struct com_ClientList clientList[], int numThreads){
-    //Go thru each clientList and see which one has the least connected clients
-    int least = -1, numConnected = INT_MAX;
-    for(int i = 0; i < numThreads; i++){
-        pthread_mutex_lock(&clientList[i].clientListMutex);
-        if(clientList[i].connected < clientList[i].maxClients){
-            if(least == -1 || clientList[i].connected < numConnected){
-                least = i;
-                numConnected = clientList[i].connected;
-            }
-        }	
-        pthread_mutex_unlock(&clientList[i].clientListMutex);
-    }
-
-    if(least != -1){
-        pthread_mutex_lock(&clientList[least].clientListMutex);
-        clientList[least].connected++;
-        
-        int selectedSpot = 0;
-        for(int i = 0; i < clientList[least].maxClients; i++){
-            if(clientList[least].clients[i].fd < 0){
-                selectedSpot = i;
-                break;
-            }
-        }
-        clientList[least].clients[selectedSpot].fd = addr.socket;
-        
-        pthread_mutex_unlock(&clientList[least].clientListMutex);
-
-        usr_createUser(&addr, UNREGISTERED_NAME);
-
-        return least;
-    }
-
-    log_logMessage("Reached max clients!", WARNING);
-    return -1;
 }
 
 int com_setupIOThreads(struct fig_ConfigData *config){
     char buff[BUFSIZ];
     int numThreads = config->threadsIO;
 
-    // Setup data for the ClientList and then start its thread
-    int leftOver = config->clients % numThreads; // Get remaining spots for each thread
+	threads = calloc(numThreads, sizeof(pthread_t));
+	if(threads == NULL){
+		log_logError("Error allocating space for IO threads", FATAL);
+		exit(EXIT_FAILURE);
+	}
+
     int ret = 0;
     for(int i = 0; i < numThreads; i++){
-        clientList[i].maxClients = config->clients / numThreads;
-        if(leftOver > 0){
-            clientList[i].maxClients++;
-            leftOver--;
-        }
-        clientList[i].threadNum = i;
-
-        // Initialize the mutex to prevent locking issues
-        ret = pthread_mutex_init(&clientList[i].clientListMutex, NULL);
-        if(ret < 0){
-            log_logError("Error initalizing pthread_mutex", ERROR);
-            return -1;
-        }
-
-        ret = pthread_create(&clientList[i].thread, NULL, com_communicateWithClients, &clientList[i]);
+        ret = pthread_create(&threads[i], NULL, com_communicateWithClients, &com_epollfd);
         if(ret != 0){
             snprintf(buff, ARRAY_SIZE(buff), "Error with pthread_create: %d", ret);
             log_logMessage(buff, ERROR);
@@ -424,37 +359,71 @@ int com_setupIOThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int com_acceptClients(){
+int com_acceptClient(struct com_SocketInfo *serverSock, int epoll_sock){
 	char buff[BUFSIZ];
 
-	while(1){
-		struct sockaddr_storage cliAddr;
-		socklen_t cliAddrSize = sizeof(cliAddr);
+	struct sockaddr_storage cliAddr;
+	socklen_t cliAddrSize = sizeof(cliAddr);
 
-		//Accept client's connection and log its IP
-		struct com_SocketInfo newCli;
-		int client = accept(serverSockAddr.socket, (struct sockaddr *)&cliAddr, &cliAddrSize);
-		if(client < 0){
-			log_logError("Error accepting client", WARNING);
-			continue;
-		}
+	//Accept client's connection and log its IP
+	struct com_SocketInfo newCli;
+	int client = accept(serverSock->socket, (struct sockaddr *)&cliAddr, &cliAddrSize);
 
-		char ipstr[INET6_ADDRSTRLEN];
-		if(!getHost(ipstr, cliAddr, serverSockAddr.addr.ss_family)){
-			strncpy(buff, "New client connected from: ", ARRAY_SIZE(buff));
-			strncat(buff, ipstr, ARRAY_SIZE(buff)-strlen(buff));
-			log_logMessage(buff, INFO);
-		}
+	// Reset listening socket
+	struct epoll_event ev = {.events = EPOLLIN | EPOLLONESHOT}; 
+	ev.data.ptr = serverUser;
+	if(epoll_ctl(epoll_sock, EPOLL_CTL_MOD, serverSock->socket, &ev) == -1){
+		log_logError("epoll_ctl rearming server", ERROR);
+		return -1;
+	}
 
-		// Fill in newCli struct
-		newCli.socket = client;
-		memcpy(&newCli.addr, &cliAddr, cliAddrSize);
+	if(client < 0){
+		log_logError("Error accepting client", WARNING);
+		return -1;
+	}
 
-		int ret = com_insertClient(newCli, clientList, fig_Configuration.threadsIO);
-		if(ret < 0){
-			snprintf(buff, ARRAY_SIZE(buff), "Server is full");
-			send(client, buff, strlen(buff), 0);
+	char ipstr[INET6_ADDRSTRLEN];
+	if(!getHost(ipstr, cliAddr, serverSock->addr.ss_family)){
+		snprintf(buff, ARRAY_SIZE(buff), "New connection from: %s", ipstr);
+		log_logMessage(buff, INFO);
+	}
+
+	// Fill in newCli struct
+	newCli.socket = client;
+	memcpy(&newCli.addr, &cliAddr, cliAddrSize);
+	newCli.socket2 = dup(client);
+	if(newCli.socket2 == -1){
+		log_logError("Error creating 2nd fd for client", WARNING);
+		return -1;
+	}
+
+	if(chat_serverIsFull() == 1){
+		snprintf(buff, ARRAY_SIZE(buff), "Server is full, try again later.");
+		send(client, buff, strlen(buff), 0);
+		close(client);
+		close(newCli.socket2);
+		
+		return -1;
+	} else {
+		struct usr_UserData *user = usr_createUser(&newCli, UNREGISTERED_NAME);
+		if(user == NULL){
 			close(client);
+			close(newCli.socket2);
+			return -1;
+		} 
+		ev.data.ptr = user;
+
+		// Add to epoll
+		if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, client, &ev) == -1){
+			log_logError("epoll_ctl accepting client", WARNING);
+			return -1;
+		}
+
+		// Setup to allow for a write
+		ev.events = EPOLLOUT|EPOLLONESHOT;
+		if(epoll_ctl(epoll_sock, EPOLL_CTL_ADD, newCli.socket2, &ev) == -1){
+			log_logError("epoll_ctl writing to client", WARNING);
+			return -1;
 		}
 	}
 
@@ -526,8 +495,7 @@ int com_startServerSocket(struct fig_ConfigData* data, struct com_SocketInfo* so
 		return -1;
 	} else {
 		char msg[BUFSIZ];
-		strncpy(msg, "Listening to port ", ARRAY_SIZE(msg));
-		strncat(msg, port, 6);
+		snprintf(msg, ARRAY_SIZE(msg), "Listening to port: %s.", port);
 		log_logMessage(msg, INFO);
 	}
 

@@ -8,10 +8,12 @@
 #include "linkedlist.h"
 #include "commands.h"
 
-struct chat_ServerLists serverLists;
-struct chat_DataQueue dataQueue;
+struct chat_ServerLists serverLists = {0};
+struct chat_DataQueue dataQueue = {0};
 
 int init_chat(){
+	char buff[100];
+
 	// Compensate for null byte '\0'
 	fig_Configuration.nickLen++; 
 	fig_Configuration.groupNameLength++;
@@ -38,6 +40,8 @@ int init_chat(){
         log_logError("Error initalizing users list.", ERROR);
         return -1;
 	}
+	snprintf(buff, ARRAY_SIZE(buff), "Maximum user count: %d.", serverLists.max);
+	log_logMessage(buff, INFO);
 
 	// Set id of all users to -1, and set nick lengths
 	for (int i = 0; i < serverLists.max; i++){
@@ -50,6 +54,13 @@ int init_chat(){
 void chat_close(){
     free(dataQueue.threads);
 	free(serverLists.users);
+}
+
+int chat_serverIsFull(){
+	if(serverLists.connected >= serverLists.max)
+		return 1;
+
+	return -1;
 }
 
 int chat_setupDataThreads(struct fig_ConfigData *config){

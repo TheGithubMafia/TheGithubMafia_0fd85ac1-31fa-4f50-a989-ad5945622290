@@ -18,21 +18,21 @@ void cleanUpServer(){
 }
 
 int main(){
-	log_logMessage("Now starting boundless.chat server: V1.0.0.", INFO);
+	log_logMessage("Now starting boundless.chat server: V1.1.0.", INFO);
     atexit(cleanUpServer);
 
     if(init_config("example_config.conf") == -1) /* config.h */
 		return -1;
     if(init_logging() == -1) /* logging.h */
 		return -1;
+    if(init_chat() == -1) /* chat.h */
+		return -1;
     if(init_server() == -1) /* communication.h */
 		return -1;
     if(init_commands() == -1) /* commands.h */
 		return -1;
-    if(init_chat() == -1) /* chat.h */
-		return -1;
 
-    com_acceptClients();
+	while(1);
 
     return 0;
 }
