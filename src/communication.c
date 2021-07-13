@@ -44,7 +44,7 @@ int init_server(){
 	}
 
 	// TODO deal with random users sending data to this user
-	serverUser = usr_createUser(&serverSockAddr, "SERVER");
+	serverUser = usr_createUser(&serverSockAddr, fig_Configuration.serverName);
 	if(!serverUser){
 		log_logMessage("Unable to create the SERVER user", ERROR);
 		return -1;

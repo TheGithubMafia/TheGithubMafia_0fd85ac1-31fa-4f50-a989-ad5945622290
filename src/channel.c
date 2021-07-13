@@ -98,7 +98,7 @@ struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
     }
 
     struct chan_Channel *channel;
-    channel = malloc(sizeof(struct chan_Channel));
+    channel = calloc(1, sizeof(struct chan_Channel));
 	channel->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
     if(channel == NULL || channel->name == NULL){
         log_logError("Error creating channel", ERROR);
@@ -192,27 +192,27 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 }
 
 // Adds or removes a mode from a channel's modes array
-// TODO - adding/removing could be more efficient
 void chan_changeChannelModeArray(char op, char mode, struct link_Node *channelNode){
 	struct chan_Channel *channel = channelNode->data;
 
 	if(channelNode == NULL || channel == NULL)
 		return;
 
+	// Guarantee that mode only appears once
+	if(op == '+' && chan_channelHasMode(mode, channelNode) == 1)
+		return;
+
 	pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < ARRAY_SIZE(channel->modes); i++){
 		if(op == '+'){
-			if(channel->modes[i] == mode){
-				op = '-';
-			}
-
 			if(channel->modes[i] == '\0'){
 				channel->modes[i] = mode;
-				op = '-';
+				break;
 			}
 		} else {
-			if(channel->modes[i] == mode){ // Go thru to remove all duplicates
+			if(channel->modes[i] == mode){ 
 				channel->modes[i] = '\0';
+				break;
 			}
 		}
 	}

@@ -18,7 +18,7 @@ void cleanUpServer(){
 }
 
 int main(){
-	log_logMessage("Now starting boundless.chat server: V1.1.0.", INFO);
+	log_logMessage("Now starting boundless.chat server: V1.1.1.", INFO);
     atexit(cleanUpServer);
 
     if(init_config("example_config.conf") == -1) /* config.h */
@@ -32,7 +32,7 @@ int main(){
     if(init_commands() == -1) /* commands.h */
 		return -1;
 
-	while(1);
+	sleep(-1);
 
     return 0;
 }

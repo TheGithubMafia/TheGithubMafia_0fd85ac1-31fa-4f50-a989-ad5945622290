@@ -293,6 +293,7 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
 	// Make sure key is valid
+	printf("bruh\n");
 	if(chan_checkKey(channel, cmd->params[1]) == -1){
 		params[1] = cmd->params[0];
 		params[0] = nickname;
@@ -529,7 +530,7 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 		}
 	}
 
-	chat_createMessage(reply, user, nickname, "MODE", params, 3);
+	chat_createMessage(reply, NULL, nickname, "MODE", params, 3);
     chan_sendChannelMessage(reply, channel);
 	return 2;
 }
