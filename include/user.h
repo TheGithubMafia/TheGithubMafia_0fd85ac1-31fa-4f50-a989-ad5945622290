@@ -2,6 +2,7 @@
 #define user_h
 
 #include "chat.h"
+#include <time.h>
 
 #define UNREGISTERED_NAME "unreg"
 
@@ -16,6 +17,7 @@ struct usr_UserData {
 	struct com_SocketInfo socketInfo;	
 	char *nickname;
 	pthread_mutex_t userMutex;
+	time_t lastMsg; // Keep track of time, too fast = kick, too slow = kick
 };
 
 // Fills in buffer with selected user's nickname

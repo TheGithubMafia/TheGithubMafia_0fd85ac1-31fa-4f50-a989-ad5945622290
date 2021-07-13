@@ -12,25 +12,42 @@ int link_isEmpty(struct link_List *list){
 }
 
 struct link_Node *link_add(struct link_List *list, void *data){
+	return link_insert(list, data, list->size);
+}
+
+// Same as link_add, except puts item in specified pos
+struct link_Node *link_insert(struct link_List *list, void *data, int pos){
+	if(list == NULL)
+		return NULL;
+
     struct link_Node *node = malloc(sizeof(struct link_Node));
     if(node == NULL){
             log_logError("Error adding to linked list", DEBUG);
             return NULL;
     }
+	node->data = data;
+
+	struct link_Node *after = link_getNode(list, pos);
+	struct link_Node *before = NULL;
+	if(after == NULL){ // Put at end of the list
+		before = list->tail;	
+		node->next = NULL;
+		list->tail = node;
+	} else {
+		before = after->prev;
+	}
+
+	if(before == NULL) { // Head of the list
+		list->head = node;
+	} else {
+		before->next = node;
+	}
+
+	node->next = after;
+	node->prev = before;
+
     list->size++;
-
-    node->data = data;
-    node->next = NULL;
-    if(!link_isEmpty(list)){ // Is the head if list is empty
-            list->head = node;
-            node->prev = NULL;
-    } else { //Only works if isn't the head 
-            node->prev = list->tail;
-            list->tail->next = node;
-    }
-    list->tail = node;
-
-    return node;
+	return node;
 }
 
 void *link_remove(struct link_List *list, int pos){

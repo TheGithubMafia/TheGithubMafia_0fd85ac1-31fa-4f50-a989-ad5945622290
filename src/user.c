@@ -95,16 +95,21 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 
     //Set user's data
     memset(user, 0, sizeof(struct usr_UserData));
+
 	// Allocate necesary data for the user's nickname
 	user->nickname = calloc(fig_Configuration.nickLen, sizeof(char));
 	if(user->nickname == NULL){
 		log_logError("Error allocating user memory", ERROR);
 		return NULL;
 	}
+
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 	usr_changeUserMode(user, '+', 'r');
+	user->lastMsg = time(NULL); // Starting time
+
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;
+
 	// Do this last to ensure user isn't selected before it is ready to be used
     strncpy(user->nickname, name, fig_Configuration.nickLen);
 
@@ -120,16 +125,17 @@ int usr_deleteUser(struct usr_UserData *user){
     user->id = -1; // -1 means invalid user
 	if(user->nickname != NULL)
 		free(user->nickname);
-    pthread_mutex_unlock(&user->userMutex);
-
-    // Remove all pending messages
-    com_cleanQueue(user);
 
     // Remove socket
 	close(user->socketInfo.socket);
     user->socketInfo.socket = -2; // Ensure that no data sent to wrong user
 	close(user->socketInfo.socket2);
     user->socketInfo.socket2 = -2; // Ensure that no data sent to wrong user
+
+    pthread_mutex_unlock(&user->userMutex);
+
+    // Remove all pending messages
+    com_cleanQueue(user);
 
     // Channels
     chan_removeUserFromAllChannels(user);

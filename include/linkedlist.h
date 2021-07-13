@@ -27,9 +27,10 @@ int link_isEmpty(struct link_List *list);
 // Add element to end of list
 struct link_Node *link_add(struct link_List *list, void *data);
 
-/*
- * Returns the pointer to the data
- */
+// Same as link_add, except puts item in specified pos
+struct link_Node *link_insert(struct link_List *list, void *data, int pos);
+
+// Returns the pointer to the data
 void *link_remove(struct link_List *list, int pos);
 
 void *link_removeNode(struct link_List *list, struct link_Node *node);

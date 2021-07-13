@@ -15,6 +15,7 @@ void cleanUpServer(){
 	log_close();
 	com_close();
 	chat_close();
+	events_close();
 }
 
 int main(){

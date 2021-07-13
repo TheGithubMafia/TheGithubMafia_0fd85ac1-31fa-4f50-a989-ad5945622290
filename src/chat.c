@@ -43,9 +43,16 @@ int init_chat(){
 	snprintf(buff, ARRAY_SIZE(buff), "Maximum user count: %d.", serverLists.max);
 	log_logMessage(buff, INFO);
 
-	// Set id of all users to -1, and set nick lengths
+	// Set id of all users to -1 and init their mutexes
 	for (int i = 0; i < serverLists.max; i++){
 		serverLists.users[i].id = -1;
+
+		// Initalize mutex to prevent locking issues
+		int ret = pthread_mutex_init(&serverLists.users[i].userMutex, NULL);
+		if (ret < 0){
+			log_logError("Error initalizing pthread_mutex.", ERROR);
+			return -1;
+		}
 	}
 
     return chat_setupDataThreads(&fig_Configuration); 

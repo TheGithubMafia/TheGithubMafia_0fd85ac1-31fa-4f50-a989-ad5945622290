@@ -293,7 +293,6 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
     }
 
 	// Make sure key is valid
-	printf("bruh\n");
 	if(chan_checkKey(channel, cmd->params[1]) == -1){
 		params[1] = cmd->params[0];
 		params[0] = nickname;
@@ -347,7 +346,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     // Success
     char nickname[fig_Configuration.nickLen];
     usr_getNickname(nickname, user);
-    char names[ARRAY_SIZE(cmd->params[0])];
+    char names[ARRAY_SIZE(cmd->params[0])] = {0};
     chan_getUsersInChannel(channel, names, ARRAY_SIZE(names));
     params[0] = nickname;
     params[1] = "=";
