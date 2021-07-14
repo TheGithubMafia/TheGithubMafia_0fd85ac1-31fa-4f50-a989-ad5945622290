@@ -170,6 +170,10 @@ void log_createLogFormat(char* buffer, int size, char* msg, int type){
 		case MESSAGE:
 			typeStr = "MESSAGE";
 			break;
+		
+		case EVENT:
+			typeStr = "EVENT";
+			break;
 
 	}
 	

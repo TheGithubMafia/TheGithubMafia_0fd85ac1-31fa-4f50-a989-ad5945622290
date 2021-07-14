@@ -17,6 +17,7 @@
 #define ERROR	(4)
 #define FATAL	(5)
 #define MESSAGE	(6)
+#define EVENT	(7)
 
 /* Struct that defines how logging should be carried out
    useFile determines if logs will go to a file or not

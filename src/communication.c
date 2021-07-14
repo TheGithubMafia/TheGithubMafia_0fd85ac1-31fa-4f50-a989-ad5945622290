@@ -202,7 +202,7 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 		return -1;
 	}
 	int sockfd = user->socketInfo.socket;
-
+		
 	char buff[BUFSIZ] = {0};
 	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
 
