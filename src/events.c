@@ -25,12 +25,11 @@ int init_events(){
         return -1;
     }
 
-	evt_test();
-
 	return 1;
 }
 
 void events_close(){
+	// TODO destroy MUTEXES and COND
 	return; // Clear out events.list
 }
 

@@ -6,7 +6,10 @@
 #include "logging.h"
 
 //Used to convert string option to an integer
-const char *options[] = {"port", "log", "enablelogging", "numiothreads", "numdatathreads", "numclients", "nicklength", "servername", "channelnamelength", "groupnamelength"};
+const char *options[] = {"port", "log", "enablelogging", "numiothreads", 
+						"numdatathreads", "numclients", "nicklength", 
+						"servername", "channelnamelength", "groupnamelength", 
+						"timeout", "messagelimit"};
 
 // Struct to store all config data
 struct fig_ConfigData fig_Configuration = {
@@ -138,6 +141,16 @@ void fig_parseLine(char *line, int lineNo){
 		case 9:
 			//groupNameLength
 			val = &fig_Configuration.groupNameLength;
+			goto edit_int;
+
+		case 10:
+			//timeOut
+			val = &fig_Configuration.timeOut;
+			goto edit_int;
+
+		case 11:
+			//messageLimit
+			val = &fig_Configuration.messageLimit;
 			goto edit_int;
 
 		edit_int:

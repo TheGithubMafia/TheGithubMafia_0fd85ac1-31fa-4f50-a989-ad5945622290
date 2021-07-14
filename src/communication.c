@@ -21,6 +21,8 @@ int com_serverSocket = -1, com_epollfd = -1;
 int com_numThreads = -1;
 struct usr_UserData *serverUser;
 
+int timeOut, messageLimit;
+
 struct com_DataQueue com_dataQ;
 
 extern struct chat_ServerLists serverLists;
@@ -65,6 +67,9 @@ int init_server(){
         log_logError("Error initalizing pthread_mutex.", ERROR);
         return -1;
     }
+
+	timeOut = fig_Configuration.timeOut;
+	messageLimit = fig_Configuration.messageLimit;
 
     //Setup threads for listening
     com_numThreads = com_setupIOThreads(&fig_Configuration);
@@ -224,7 +229,18 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 			usr_deleteUser(user);
 			break;
 
-		default:
+		default: ; 
+			// Check time inbetween messages (too fast == quit)
+			pthread_mutex_lock(&user->userMutex);
+			double timeDifference = difftime(time(NULL), user->lastMsg);
+			user->lastMsg = time(NULL);
+			pthread_mutex_unlock(&user->userMutex);
+
+			if(timeDifference < (double) messageLimit){
+				usr_deleteUser(user);
+				return -1;
+			}
+
 			// Split up each line into its own job
 			int loc = 0;
 			struct com_QueueJob *job;

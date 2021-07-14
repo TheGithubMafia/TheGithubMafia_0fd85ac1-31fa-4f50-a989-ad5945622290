@@ -20,6 +20,7 @@ struct fig_ConfigData {
 	int threadsIO, threadsDATA;
 	int clients;
 	int nickLen, chanNameLength, groupNameLength;
+	int timeOut, messageLimit;
 };	
 
 // Struct to store all config data
