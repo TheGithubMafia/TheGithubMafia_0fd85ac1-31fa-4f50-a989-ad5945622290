@@ -145,6 +145,29 @@ int usr_deleteUser(struct usr_UserData *user){
     return 1;
 }
 
+// Searches for and kicks users that surpassed their message timeouts
+int usr_timeOutUsers(int timeOut){
+    struct usr_UserData *user;
+
+    for(int i = 0; i < serverLists.max; i++){
+            user = &serverLists.users[i];
+            pthread_mutex_lock(&user->userMutex);
+
+			if(user->id != -1){
+				int diff = (int) difftime(time(NULL), user->lastMsg);
+				if(diff > timeOut){
+					pthread_mutex_unlock(&user->userMutex);
+					usr_deleteUser(user);	
+					continue;
+				}
+			}
+
+            pthread_mutex_unlock(&user->userMutex);
+    }
+
+    return 1;
+}
+
 void usr_changeUserMode(struct usr_UserData *user, char op, char mode){
 	if(user == NULL || user->id < 0){
 		return;

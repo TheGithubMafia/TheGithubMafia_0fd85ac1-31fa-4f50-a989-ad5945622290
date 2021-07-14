@@ -37,4 +37,7 @@ int evt_executeEvents();
 // Will print "test" every 5 seconds
 int evt_test(); 
 
+// Searches for and kicks users that surpassed their message timeouts
+int evt_userTimeout();
+
 #endif

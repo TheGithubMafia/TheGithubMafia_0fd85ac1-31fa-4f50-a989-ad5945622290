@@ -38,6 +38,9 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 // Remove a user from the server
 int usr_deleteUser(struct usr_UserData *user);
 
+// Searches for and kicks users that surpassed their message timeouts
+int usr_timeOutUsers(int timeOut);
+
 // Adds or removes a mode from a user
 void usr_changeUserMode(struct usr_UserData *user, char op, char mode);
 

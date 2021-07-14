@@ -5,6 +5,8 @@ struct evt_List events;
 pthread_mutex_t timerMutex;
 pthread_cond_t timerCond;
 
+// TODO - fix issues with events blocking each other
+
 int init_events(){
     // Initalize mutex to prevent locking issues
     int ret = pthread_mutex_init(&events.mutex, NULL);
@@ -24,6 +26,9 @@ int init_events(){
         log_logError("Error initalizing pthread_cond.", ERROR);
         return -1;
     }
+	
+	evt_userTimeout();
+	evt_test();
 
 	return 1;
 }
@@ -160,4 +165,16 @@ int evt_test(){
 	evt_addEvent(&execTime, &evt_test);
 
 	return 1;
+}
+
+// Searches for and kicks users that surpassed their message timeouts
+int evt_userTimeout(){
+	log_logMessage("Removing timed-out users.", EVENT);
+
+	struct timespec execTime;
+	clock_gettime(CLOCK_REALTIME, &execTime);
+	execTime.tv_sec += fig_Configuration.timeOut;
+	evt_addEvent(&execTime, &evt_userTimeout);
+
+	return usr_timeOutUsers(fig_Configuration.timeOut);
 }
