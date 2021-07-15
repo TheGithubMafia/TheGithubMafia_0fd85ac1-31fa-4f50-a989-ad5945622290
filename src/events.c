@@ -28,7 +28,7 @@ int init_events(){
     }
 	
 	evt_userTimeout();
-	//evt_test();
+	evt_test();
 
 	return 1;
 }
@@ -47,7 +47,6 @@ int evt_compareTimes(struct timespec *first, struct timespec *second){
 	return first->tv_sec > second->tv_sec;
 }
 
-// TODO - think of auto sorting using this function
 int evt_addEvent(struct timespec *execTime, int (*func)()){
 	if(func == NULL)
 		return -1;
@@ -66,8 +65,21 @@ int evt_addEvent(struct timespec *execTime, int (*func)()){
 		memcpy(&item->execTime, execTime, sizeof(struct timespec));
 	}
 
+	// Insert it so that the order of events is correct (earliest -> latest)
 	pthread_mutex_lock(&events.mutex);
-	if(link_add(&events.list, item) == NULL)
+	struct link_Node *node;
+	int pos = 0;
+	for(node = events.list.head; node != NULL; node = node->next){
+		struct evt_Item *nodeItem = node->data;
+		
+		// Earlier than current one = insert before
+		if(evt_compareTimes(&nodeItem->execTime, &item->execTime) == 1)
+			break;
+
+		pos++;
+	}
+
+	if(link_insert(&events.list, item, pos) == NULL)
 		log_logMessage("Error adding event.", WARNING);
 	pthread_mutex_unlock(&events.mutex);
 
@@ -78,40 +90,31 @@ int evt_addEvent(struct timespec *execTime, int (*func)()){
 
 // Runs the next event, if any, from the queue
 int evt_runNextEvent(){
-	struct link_Node *node, *best;
-	struct evt_Item *item, *bestItem = NULL;
+	struct link_Node *node;
+	struct evt_Item *item;
 
-	// Find the earliest scheduled event
+	// Get first event in list
 	pthread_mutex_lock(&events.mutex);
-	best = events.list.head;
-	for(node = events.list.head; node != NULL; node = node->next){
-		item = node->data;		
-		bestItem = best->data;
+	node = events.list.head;
 
-		// False if first is earlier
-		if(evt_compareTimes(&item->execTime, &bestItem->execTime) == 0){
-			best = node;	
-		}
-	}
-
-	if(best != NULL)
-		bestItem = link_removeNode(&events.list, best);
+	if(node != NULL)
+		item = link_remove(&events.list, 0);
 	pthread_mutex_unlock(&events.mutex);
 	
-	if(best == NULL || bestItem == NULL)
+	if(item == NULL)
 		return -1;
 
 	struct timespec currentTime;
 	clock_gettime(CLOCK_REALTIME, &currentTime);
-	if(currentTime.tv_sec >= bestItem->execTime.tv_sec){ // Should be executed
-		int ret = bestItem->func();
-		free(bestItem);
+	if(currentTime.tv_sec >= item->execTime.tv_sec){ // Should be executed
+		int ret = item->func();
+		free(item);
 		return ret;
 	}
 
 	// Put unused item back
 	pthread_mutex_lock(&events.mutex);
-	if(link_add(&events.list, bestItem) == NULL)
+	if(link_add(&events.list, item) == NULL)
 		log_logMessage("Error adding event.", WARNING);
 	pthread_mutex_unlock(&events.mutex);
 
@@ -123,7 +126,7 @@ void evt_waitUntilNextEvent(){
 
 	// Grab the time from the list
 	pthread_mutex_lock(&events.mutex);
-	struct link_Node *itemNode = link_getNode(&events.list, 0);
+	struct link_Node *itemNode = events.list.head;
 	if(itemNode != NULL)
 		execTime = ((struct evt_Item *) itemNode->data)->execTime;
 	pthread_mutex_unlock(&events.mutex);
