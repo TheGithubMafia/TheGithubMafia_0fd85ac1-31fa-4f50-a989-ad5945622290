@@ -33,6 +33,8 @@ int init_commands() {
     cmd_addCommand("PART", 1, 1, &cmd_part);
     cmd_addCommand("KICK", 2, 1, &cmd_kick);
     cmd_addCommand("MODE", 2, 1, &cmd_mode);
+    cmd_addCommand("PING", 0, 0, &cmd_ping);
+    cmd_addCommand("PONG", 0, 0, &cmd_ping);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;
@@ -531,5 +533,25 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 
 	chat_createMessage(reply, NULL, nickname, "MODE", params, 3);
     chan_sendChannelMessage(reply, channel);
+	return 2;
+}
+
+// Send back a PONG
+int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply){
+    struct usr_UserData *user = cmd->user;
+    char *params[ARRAY_SIZE(cmd->params)];
+	int size = 0;
+
+	if(cmd->paramCount > 0){
+		params[0] = cmd->params[0];
+		size = 1;
+	}
+
+	chat_createMessage(reply, user, NULL, "PONG", params, size);
+	return 1;
+}
+
+// Response to PONG = do nothing
+int cmd_pong(UNUSED(struct chat_Message *cmd), UNUSED(struct chat_Message *reply)){
 	return 2;
 }

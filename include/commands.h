@@ -8,6 +8,7 @@
 #include "channel.h"
 
 #define NUMERIC_SIZE 15
+#define UNUSED(x) x __attribute__((unused))
 
 struct chat_Message;
 struct chan_Channel;
@@ -24,7 +25,6 @@ struct cmd_CommandList {
 struct cmd_Command {
     char word[50];
     int minParams;
-    char responses[5][50];
     int (*func)(struct chat_Message *, struct chat_Message *);
 	int permLevel;
 };
@@ -75,5 +75,11 @@ int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 
 // Used by cmd_mode spefically for a channel
 int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
+
+// Send back a PONG
+int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply);
+
+// Response to PONG = do nothing
+int cmd_pong(struct chat_Message *cmd, struct chat_Message *reply);
 
 #endif

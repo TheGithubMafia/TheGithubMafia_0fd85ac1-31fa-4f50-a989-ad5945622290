@@ -28,7 +28,7 @@ int init_events(){
     }
 	
 	evt_userTimeout();
-	evt_test();
+	//evt_test();
 
 	return 1;
 }

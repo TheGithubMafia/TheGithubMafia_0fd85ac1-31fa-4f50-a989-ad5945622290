@@ -276,6 +276,7 @@ int chat_sendServerMessage(struct chat_Message *cmd){
 int chat_createMessage(struct chat_Message *msg, struct usr_UserData *user, char *prefix, char *cmd, char **params, int paramCount) {
     msg->user = user;
 
+	msg->prefix[0] = '\0';
     if(prefix != NULL){ // Automatically insert a ':' infront
         msg->prefix[0] = ':';
         strncpy(&msg->prefix[1], prefix, ARRAY_SIZE(msg->prefix)-1);
@@ -292,7 +293,11 @@ int chat_createMessage(struct chat_Message *msg, struct usr_UserData *user, char
 }
 
 int chat_messageToString(struct chat_Message *msg, char *str, int sizeStr) {
-    snprintf(str, sizeStr, "%s %s", msg->prefix, msg->command);
+	if(msg->prefix[0] != '\0'){
+	    snprintf(str, sizeStr, "%s %s", msg->prefix, msg->command);
+	} else {
+	    snprintf(str, sizeStr, "%s", msg->command);
+	}
     
     int newLen = sizeStr - strlen(str);
     for (int i = 0; i < msg->paramCount && newLen > 0; i++){
