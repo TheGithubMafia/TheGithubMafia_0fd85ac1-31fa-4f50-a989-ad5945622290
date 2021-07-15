@@ -172,11 +172,9 @@ int evt_test(){
 
 // Searches for and kicks users that surpassed their message timeouts
 int evt_userTimeout(){
-	log_logMessage("Removing timed-out users.", EVENT);
-
 	struct timespec execTime;
 	clock_gettime(CLOCK_REALTIME, &execTime);
-	execTime.tv_sec += fig_Configuration.timeOut;
+	execTime.tv_sec += 1;
 	evt_addEvent(&execTime, &evt_userTimeout);
 
 	return usr_timeOutUsers(fig_Configuration.timeOut);

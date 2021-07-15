@@ -18,6 +18,7 @@ struct usr_UserData {
 	char *nickname;
 	pthread_mutex_t userMutex;
 	time_t lastMsg; // Keep track of time, too fast = kick, too slow = kick
+	int pinged; // Send only one ping to prevent spam from server
 };
 
 // Fills in buffer with selected user's nickname

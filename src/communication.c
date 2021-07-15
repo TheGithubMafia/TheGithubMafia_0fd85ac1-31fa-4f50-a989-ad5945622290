@@ -96,10 +96,15 @@ int com_sendStr(struct usr_UserData *user, char *msg){
     snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
     com_insertQueue(job);
 
+	// Safely get user's mutex
+	pthread_mutex_lock(&user->userMutex);
+	int sock = user->socketInfo.socket2;
+	pthread_mutex_unlock(&user->userMutex);
+
 	// Setup to allow for a write
 	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
 	ev.data.ptr = user;
-	if(epoll_ctl(com_epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
+	if(epoll_ctl(com_epollfd, EPOLL_CTL_MOD, sock, &ev) == -1){
 		log_logError("Error rearming write socket", WARNING);
 		usr_deleteUser(user);
 		return -1;
@@ -140,16 +145,12 @@ int com_insertQueue(struct com_QueueJob *job){
         return -1; 
     }
 
-    // Guard to make sure user does not disconnect during this
-    pthread_mutex_lock(&user->userMutex);
-
     pthread_mutex_lock(&com_dataQ.queueMutex);
 	struct link_Node *ret = link_add(&com_dataQ.queue, job);
 	if(ret == NULL){
 		log_logMessage("Error adding job to queue", WARNING);
 	}
     pthread_mutex_unlock(&com_dataQ.queueMutex);
-    pthread_mutex_unlock(&user->userMutex);
 
     return 1;
 }
@@ -234,6 +235,7 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 			pthread_mutex_lock(&user->userMutex);
 			double timeDifference = difftime(time(NULL), user->lastMsg);
 			user->lastMsg = time(NULL);
+			user->pinged = -1; // Reset ping
 			pthread_mutex_unlock(&user->userMutex);
 
 			if(timeDifference < (double) messageLimit){
@@ -291,6 +293,15 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 		free(job);
 
 		if(user != NULL){
+			pthread_mutex_lock(&user->userMutex);
+			int socket = user->socketInfo.socket2;
+			if(user->id < 0)
+				socket = -1;
+			pthread_mutex_unlock(&user->userMutex);
+
+			if(socket < 0)
+				return -1;
+
 			log_logMessage(buff, MESSAGE);
 			int ret = write(user->socketInfo.socket2, buff, strlen(buff));
 			if(ret == -1){

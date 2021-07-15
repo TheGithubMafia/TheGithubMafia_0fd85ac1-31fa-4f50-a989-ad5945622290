@@ -106,6 +106,7 @@ struct usr_UserData *usr_createUser(struct com_SocketInfo *sockInfo, char *name)
 	memcpy(&user->socketInfo, sockInfo, sizeof(struct com_SocketInfo));
 	usr_changeUserMode(user, '+', 'r');
 	user->lastMsg = time(NULL); // Starting time
+	user->pinged = 0; // Dont ping on registration, but still kick if idle
 
     //eventually get this id from saved user data
     user->id = usr_globalUserID++;
@@ -132,10 +133,10 @@ int usr_deleteUser(struct usr_UserData *user){
 	close(user->socketInfo.socket2);
     user->socketInfo.socket2 = -2; // Ensure that no data sent to wrong user
 
-    pthread_mutex_unlock(&user->userMutex);
-
     // Remove all pending messages
     com_cleanQueue(user);
+
+    pthread_mutex_unlock(&user->userMutex);
 
     // Channels
     chan_removeUserFromAllChannels(user);
@@ -151,18 +152,24 @@ int usr_timeOutUsers(int timeOut){
 
     for(int i = 0; i < serverLists.max; i++){
             user = &serverLists.users[i];
-            pthread_mutex_lock(&user->userMutex);
 
-			if(user->id != -1){
-				int diff = (int) difftime(time(NULL), user->lastMsg);
+            pthread_mutex_lock(&user->userMutex);
+			int id = user->id;
+			int diff = (int) difftime(time(NULL), user->lastMsg);
+			int pinged = user->pinged;
+			pthread_mutex_unlock(&user->userMutex);
+
+			if(id != -1 && id != 0){ // Neither invalid nor SERVER
 				if(diff > timeOut){
-					pthread_mutex_unlock(&user->userMutex);
 					usr_deleteUser(user);	
-					continue;
+				} else if(pinged == -1 && diff > timeOut/2){ // Ping user
+					com_sendStr(user, "PING :Timeout imminent.");
+
+					pthread_mutex_lock(&user->userMutex);
+					user->pinged = 1;
+					pthread_mutex_unlock(&user->userMutex);
 				}
 			}
-
-            pthread_mutex_unlock(&user->userMutex);
     }
 
     return 1;
