@@ -55,7 +55,7 @@ int cmd_nick(struct chat_Message *cmd, struct chat_Message *reply);
 // Send to a message to user or channel
 int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply);
 
-// Join a channel
+// Join a channel or group
 int cmd_join(struct chat_Message *cmd, struct chat_Message *reply);
 
 // Return a list of names inside a channel
@@ -69,11 +69,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply);
 
 // Change modes for a user or channel
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply);
-
-// Used by cmd_mode spefically for the user
 int cmd_modeUser(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
-
-// Used by cmd_mode spefically for a channel
 int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp);
 
 // Send back a PONG

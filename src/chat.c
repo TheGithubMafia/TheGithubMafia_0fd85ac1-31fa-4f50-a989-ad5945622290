@@ -34,6 +34,12 @@ int init_chat(){
         return -1;
     }
 
+    ret = pthread_mutex_init(&serverLists.groupsMutex, NULL);
+    if (ret < 0){
+        log_logError("Error initalizing pthread_mutex.", ERROR);
+        return -1;
+    }
+
 	// Allocate users array
 	serverLists.users = calloc(fig_Configuration.clients, sizeof(struct usr_UserData));
 	if(serverLists.users == NULL){
@@ -48,12 +54,14 @@ int init_chat(){
 		serverLists.users[i].id = -1;
 
 		// Initalize mutex to prevent locking issues
-		int ret = pthread_mutex_init(&serverLists.users[i].userMutex, NULL);
+		ret = pthread_mutex_init(&serverLists.users[i].userMutex, NULL);
 		if (ret < 0){
 			log_logError("Error initalizing pthread_mutex.", ERROR);
 			return -1;
 		}
 	}
+
+	grp_createGroup("&General-Chat", &serverLists.users[0]);
 
     return chat_setupDataThreads(&fig_Configuration); 
 }
@@ -142,22 +150,6 @@ void *chat_processQueue(void *param){
     }
 
     return NULL;
-}
-
-// Returns the ending location using either \n or \r
-int chat_findEndLine(char *str, int size, int starting){
-	int found = -1;
-	for(int i = starting; i < size; i++){
-		if(str[i] == '\0'){
-			return -1; // It is done
-		} else if(str[i] == '\n' || str[i] == '\r'){
-			found = 1; // Keep looping until reach the next 'normal' character
-		} else if(found == 1) {
-			return i;	
-		}
-	}
-
-	return -1;
 }
 
 // TODO - Support multiple cmds in one read
@@ -318,6 +310,49 @@ int chat_findNextSpace(int starting, int size, char *str){
     }
 
     return -1;
+}
+
+// Returns the ending location using either \n or \r
+int chat_findEndLine(char *str, int size, int starting){
+	int found = -1;
+	for(int i = starting; i < size; i++){
+		if(str[i] == '\0'){
+			return -1; // It is done
+		} else if(str[i] == '\n' || str[i] == '\r'){
+			found = 1; // Keep looping until reach the next 'normal' character
+		} else if(found == 1) {
+			return i;	
+		}
+	}
+
+	return -1;
+}
+
+// General character location
+int chat_findCharacter(char *str, int size, char key){
+	for(int i = 0; i < size; i++){
+		if(str[i] == key)
+			return i;
+	}
+
+	return -1;
+}
+
+// Divide a string into groupname and channelname
+int chat_divideChanName(char *str, int size, char data[2][1000]){
+	if(str[0] == '#'){ // Only channel
+		data[0][0] = '\0';
+		strncpy(data[1], str, ARRAY_SIZE(data[1]));
+		return 1;
+	}
+
+	int divide = chat_findCharacter(str, size, '/');
+	if(divide == -1)
+		return -1;
+
+	strncpy(data[0], str, divide);
+	strncpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
+	return 1;
 }
 
 int chat_isValidMode(char mode, int isChan){

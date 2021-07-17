@@ -34,7 +34,7 @@ int init_commands() {
     cmd_addCommand("KICK", 2, 1, &cmd_kick);
     cmd_addCommand("MODE", 2, 1, &cmd_mode);
     cmd_addCommand("PING", 0, 0, &cmd_ping);
-    cmd_addCommand("PONG", 0, 0, &cmd_ping);
+    cmd_addCommand("PONG", 0, 0, &cmd_pong);
 
     log_logMessage("Successfully initalized commands.", INFO);
     return 1;

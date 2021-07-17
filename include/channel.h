@@ -4,6 +4,15 @@
 #include "user.h"
 #include "chat.h"
 #include "security.h"
+#include "group.h"
+
+/*	CHANNEL NAME FORMAT:
+	&<groupname>/#<channelname>
+
+	if no group name is supplied then
+	it is assumed to be:
+	&General-Chat/#<channelname>
+*/
 
 struct chat_Group;
 
@@ -15,11 +24,12 @@ struct chan_ChannelUser {
 
 struct chan_Channel {
 	int id;
-	int max;
-	char modes[5];
 	char *name;
+	char modes[5];
 	char key[20];
+	int max;
 	struct chan_ChannelUser *users;
+	struct link_Node *group;
 	pthread_mutex_t channelMutex;
 };
 
@@ -34,7 +44,7 @@ int chan_removeUserFromAllChannels(struct usr_UserData *user);
 struct link_Node *chan_getChannelByName(char *name);
 
 // Create a channel with the specified name, and add it to the specified group
-struct link_Node *chan_createChannel(char *name, struct chat_Group *group);
+struct link_Node *chan_createChannel(char *name, struct link_Node *group);
 
 int chan_channelHasMode(char mode, struct link_Node *channelNode);
 

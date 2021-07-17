@@ -45,10 +45,10 @@ int chan_removeUserFromChannel(struct link_Node *channelNode, struct usr_UserDat
     return ret;
 }
 
-int chan_removeUserFromAllChannels(struct usr_UserData *user){
-    struct link_Node *node;
+int chan_removeUserFromAllChannels(UNUSED(struct usr_UserData *user)){
     int ret = -1;
-
+/*
+    struct link_Node *node;
     pthread_mutex_lock(&serverLists.channelsMutex);
 
     for(node = serverLists.channels.head; node != NULL; node = node->next){
@@ -58,50 +58,45 @@ int chan_removeUserFromAllChannels(struct usr_UserData *user){
     }
 
     pthread_mutex_unlock(&serverLists.channelsMutex);
+	*/
     
     return ret;
 }
 
 struct link_Node *chan_getChannelByName(char *name){
-    struct link_Node *node;
-    struct chan_Channel *channel;
+	struct link_Node *group;
 
-    if(name[0] != '#'){
-        return NULL;
-    }
+	char data[2][1000] = {0};
+	int ret = chat_divideChanName(name, strlen(name), data);
+	if(ret == -1)
+		return NULL;
 
-    pthread_mutex_lock(&serverLists.channelsMutex);
+	if(data[0][0] == '\0'){
+		group = serverLists.groups.head;
+	} else {
+		group = grp_getGroup(data[0]);
+	}
 
-    for(node = serverLists.channels.head; node != NULL; node = node->next){
-            channel = node->data;
-            pthread_mutex_lock(&channel->channelMutex);
-
-            if(!strncmp(channel->name, name, fig_Configuration.chanNameLength)){
-                    pthread_mutex_unlock(&channel->channelMutex);
-                    pthread_mutex_unlock(&serverLists.channelsMutex);
-                    return node;
-            }
-
-            pthread_mutex_unlock(&channel->channelMutex);
-    }
-
-    pthread_mutex_unlock(&serverLists.channelsMutex);
-
-    return NULL;
+	return grp_getChannel(group, data[1]);
 }
 
 // Create a channel with the specified name
 // TODO - error checking with link_List
-struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
+struct link_Node *chan_createChannel(char *name, struct link_Node *group){
     if(name[0] != '#'){
         return NULL;
     }
 
     struct chan_Channel *channel;
     channel = calloc(1, sizeof(struct chan_Channel));
-	channel->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
-    if(channel == NULL || channel->name == NULL){
+    if(channel == NULL){
         log_logError("Error creating channel", ERROR);
+        return NULL;
+    }
+	channel->name = calloc(fig_Configuration.chanNameLength, sizeof(char));
+    if(channel->name == NULL){
+        log_logError("Error creating channel", ERROR);
+		free(channel);
         return NULL;
     }
 
@@ -109,32 +104,30 @@ struct link_Node *chan_createChannel(char *name, struct chat_Group *group){
     int ret = pthread_mutex_init(&channel->channelMutex, NULL);
     if (ret < 0){
         log_logError("Error initalizing pthread_mutex.", ERROR);
+		free(channel->name);
+		free(channel);
         return NULL;
     }
 
     // TODO - make sure name is legal
-    strncpy(channel->name, name, fig_Configuration.chanNameLength);
+    strncpy(channel->name, name, fig_Configuration.chanNameLength-1);
 
 	// Setup array of users with default size of 10
-	channel->max = 10;
-	channel->users = calloc(sizeof(struct chan_Channel), channel->max);
+	channel->max = 100;
+	channel->users = calloc(channel->max, sizeof(struct chan_Channel));
 	if(channel->users == NULL){
         log_logError("Error creating channel", ERROR);
+		free(channel->name);
+		free(channel);
         return NULL;
 	}
+	channel->group = group;
+
+	if(group == NULL)
+		group = serverLists.groups.head; // Default group
 
     // Add to the group
-    if(group != NULL){
-        pthread_mutex_lock(&group->groupMutex);
-        link_add(&group->channels, channel);
-        pthread_mutex_unlock(&group->groupMutex);
-    }
-
-    pthread_mutex_lock(&serverLists.channelsMutex);
-    struct link_Node *node = link_add(&serverLists.channels, channel);
-    pthread_mutex_unlock(&serverLists.channelsMutex);
-
-    return node;
+	return grp_addChannel(group, channel);
 }
 
 int chan_channelHasMode(char mode, struct link_Node *channelNode){

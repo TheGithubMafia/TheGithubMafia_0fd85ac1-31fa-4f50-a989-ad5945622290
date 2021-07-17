@@ -14,9 +14,10 @@
 struct usr_UserData {
 	int id;
 	char modes[5];
-	struct com_SocketInfo socketInfo;	
 	char *nickname;
+	struct com_SocketInfo socketInfo;	
 	pthread_mutex_t userMutex;
+
 	time_t lastMsg; // Keep track of time, too fast = kick, too slow = kick
 	int pinged; // Send only one ping to prevent spam from server
 };

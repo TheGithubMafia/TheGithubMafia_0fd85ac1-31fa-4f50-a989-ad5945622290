@@ -13,5 +13,8 @@
 #include "commands.h"
 #include "security.h"
 #include "events.h"
+#include "user.h"
+#include "channel.h"
+#include "group.h"
 
 #endif
