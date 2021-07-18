@@ -347,9 +347,17 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 	}
 
 	int divide = chat_findCharacter(str, size, '/');
-	if(divide == -1)
-		return -1;
+	if(divide == -1){ // Only group or neither
+		if(str[0] == '&'){
+			strncpy(data[0], str, ARRAY_SIZE(data[1]));
+			data[1][0] = '\0';
+			return 1;
+		}
 
+		return -1;
+	}
+
+	// Normal, both
 	strncpy(data[0], str, divide);
 	strncpy(data[1], &str[divide+1], ARRAY_SIZE(data[1]));
 	return 1;

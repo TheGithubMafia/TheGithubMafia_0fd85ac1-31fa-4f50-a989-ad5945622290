@@ -260,76 +260,74 @@ int cmd_privmsg(struct chat_Message *cmd, struct chat_Message *reply){
     return 2;
 }
 
-// Join a channel
+// Join a channel and/or a group
 // TODO - key for access
 // TODO - add error checking
 const char *join_usage = ":Usage: <channel>";
 int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
-    struct usr_UserData *user = cmd->user;
-    char *params[ARRAY_SIZE(cmd->params)];
-	int newChannel = -1;
-    char nickname[fig_Configuration.nickLen];
-    usr_getNickname(nickname, user);
-    
-    if(cmd->params[0][0] != '#'){
-        params[0] = (char *) invalidChanName;
-        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
-        return -1;
-    }
+	struct usr_UserData *user = cmd->user;
+	char *params[ARRAY_SIZE(cmd->params)];
+	params[0] = cmd->params[0];
+	params[1] = ":Invalid channel name format";
 
-    struct link_Node *channel = chan_getChannelByName(cmd->params[0]);
-    if(channel == NULL){
-        channel = chan_createChannel(cmd->params[0], NULL);
-		newChannel = 1;
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
 
-        if(channel == NULL){
-           return -2; // Add better error later
-        }
-
-		if(cmd->paramCount > 1)
-			chan_setKey(channel, cmd->params[1]);	
-
-        char msg[100] = "Created new channel: ";
-        strncat(msg, cmd->params[0], ARRAY_SIZE(msg) - strlen(msg) - 1);
-        log_logMessage(msg, INFO);
-    }
-
-	// Make sure key is valid
-	if(chan_checkKey(channel, cmd->params[1]) == -1){
-		params[1] = cmd->params[0];
-		params[0] = nickname;
-		chat_createMessage(reply, user, thisServer, ERR_BADCHANNELKEY, params, 2);
+	// Split name into group and channel
+	char names[2][1000];
+	int ret = chat_divideChanName(cmd->params[0], strlen(cmd->params[0]), names);
+	if(ret == -1){
+		chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 2);
 		return -1;
 	}
 
-    struct chan_ChannelUser *chanUser = chan_addToChannel(channel, user); // Check for error
-	if(newChannel == 1){
-		chanUser->permLevel = 2; // First user is the operator
+	// Sort out what to do regarding the group section
+	struct link_Node *groupNode = grp_getGroup(names[0]);
+	if(groupNode == NULL){ // Create a new group
+		groupNode = grp_createGroup(names[0], user);
+
+		if(groupNode == NULL){
+			chat_createMessage(reply, user, thisServer, ERR_NOSUCHGROUP, params, 1);
+			return -1;
+		}
+	} else { // Join if not already in
+		if(grp_isInGroup(groupNode, user) == NULL){
+			struct grp_GroupUser *grpUsr = grp_addUser(groupNode, user, 0);
+			if(grpUsr == NULL){
+				// FULL
+				chat_createMessage(reply, user, thisServer, ERR_GROUPISFULL, params, 1);
+				return -1;
+			}
+
+			// Send group message
+		}
 	}
 
-    // Success
-    params[0] = cmd->params[0];
-    chat_createMessage(reply, user, nickname, "JOIN", params, 1);
-    chan_sendChannelMessage(reply, channel);
+	if(names[1][0] == '\0') // No further action: group joined
+		return 2;
 
-    // Generate a NAMES command reply to the user for this channel
-    struct com_QueueJob *job = malloc(sizeof(struct com_QueueJob));
-    if(job == NULL){
-            log_logError("Error creating job", DEBUG);
-            return 2;
-    }
-    job->type = 1;
-    struct chat_Message *jobMsg = malloc(sizeof(struct chat_Message));
-    if(jobMsg == NULL){
-            log_logError("Error creating command", DEBUG);
-            return 2;
-    }
-    chat_createMessage(jobMsg, user, thisServer, "NAMES", params, 1);
-    job->msg = jobMsg;
-    job->user = user;
-    chat_insertQueue(job);
+	// Sort out channel	
+	struct link_Node *channelNode = grp_getChannel(groupNode, names[1]);
+	if(channelNode == NULL){ // Create it
+		channelNode = chan_createChannel(names[1], groupNode, user);
 
-    return 2;
+		if(channelNode == NULL){ // Still a problem
+			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
+			return -1;
+		}
+	} else {
+		struct chan_ChannelUser *chanUsr = chan_addToChannel(channelNode, user, 0);
+		if(chanUsr == NULL){
+			// FULL
+			chat_createMessage(reply, user, thisServer, ERR_CHANNELISFULL, params, 1);
+			return -1;
+		}
+
+		chat_createMessage(reply, user, nick, "JOIN", params, 1);
+		chan_sendChannelMessage(reply, channelNode);
+	}
+
+	return 2;
 }
 
 // Returns list of names

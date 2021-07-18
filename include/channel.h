@@ -43,8 +43,11 @@ int chan_removeUserFromAllChannels(struct usr_UserData *user);
 // Returns the node to a channel if it exists
 struct link_Node *chan_getChannelByName(char *name);
 
+// Returns full channel name
+int chan_getName(struct link_Node *channelNode, char *buff, int size);
+
 // Create a channel with the specified name, and add it to the specified group
-struct link_Node *chan_createChannel(char *name, struct link_Node *group);
+struct link_Node *chan_createChannel(char *name, struct link_Node *group, struct usr_UserData *user);
 
 int chan_channelHasMode(char mode, struct link_Node *channelNode);
 
@@ -71,8 +74,8 @@ char *chan_giveChanPerms(struct link_Node *channelNode, struct usr_UserData *use
 // check if a user is in a channel
 struct chan_ChannelUser *chan_isInChannel(struct link_Node *channelNode, struct usr_UserData *user);
 
-// Places a pointer to the user into the Channel's list, and create it if needed
-struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct usr_UserData *user);
+// Places a pointer to the user into the Channel's list
+struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct usr_UserData *user, int permLevel);
 
 // Will fill a buffer with list of nicknames
 int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size);

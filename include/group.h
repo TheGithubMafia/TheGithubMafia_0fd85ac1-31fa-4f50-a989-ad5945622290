@@ -25,10 +25,12 @@ struct grp_Group {
 
 struct chan_Channel;
 
+// Creates a new group, adds it to the main list, and creates a default channel
 struct link_Node *grp_createGroup(char *name, struct usr_UserData *user);
 
 struct link_Node *grp_getGroup(char *name);
 
+// Add user to the group and auto join to all public channels
 struct grp_GroupUser *grp_addUser(struct link_Node *groupNode, struct usr_UserData *user, int permLevel);
 
 struct grp_GroupUser *grp_isInGroup(struct link_Node *groupNode, struct usr_UserData *user);

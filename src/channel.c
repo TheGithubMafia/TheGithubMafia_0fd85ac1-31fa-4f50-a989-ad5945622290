@@ -63,6 +63,7 @@ int chan_removeUserFromAllChannels(UNUSED(struct usr_UserData *user)){
     return ret;
 }
 
+// Use full name to get channel
 struct link_Node *chan_getChannelByName(char *name){
 	struct link_Node *group;
 
@@ -80,9 +81,28 @@ struct link_Node *chan_getChannelByName(char *name){
 	return grp_getChannel(group, data[1]);
 }
 
+// Returns full channel name
+int chan_getName(struct link_Node *channelNode, char *buff, int size){
+	struct chan_Channel *channel = channelNode->data;
+	if(channel == NULL)
+		return -1;
+
+	struct grp_Group *group = channel->group->data;
+	if(group == NULL)
+		return -1;
+
+	pthread_mutex_lock(&channel->channelMutex);
+	pthread_mutex_lock(&group->groupMutex);
+	snprintf(buff, size, "%s/%s", group->name, channel->name);
+	pthread_mutex_unlock(&group->groupMutex);
+	pthread_mutex_unlock(&channel->channelMutex);
+
+	return 1;
+}
+
 // Create a channel with the specified name
 // TODO - error checking with link_List
-struct link_Node *chan_createChannel(char *name, struct link_Node *group){
+struct link_Node *chan_createChannel(char *name, struct link_Node *group, struct usr_UserData *user){
     if(name[0] != '#'){
         return NULL;
     }
@@ -121,13 +141,19 @@ struct link_Node *chan_createChannel(char *name, struct link_Node *group){
 		free(channel);
         return NULL;
 	}
-	channel->group = group;
 
+    // Add to the group
 	if(group == NULL)
 		group = serverLists.groups.head; // Default group
 
-    // Add to the group
-	return grp_addChannel(group, channel);
+	channel->group = group;
+	struct link_Node *chanNode = grp_addChannel(group, channel);
+
+	if(user != NULL){ // Add first user
+		chan_addToChannel(chanNode, user, 2);
+	}
+
+	return chanNode;
 }
 
 int chan_channelHasMode(char mode, struct link_Node *channelNode){
@@ -335,16 +361,16 @@ struct chan_ChannelUser *chan_isInChannel(struct link_Node *channelNode, struct 
 }
 
 // Add a user to a channel
-struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct usr_UserData *user){
+struct chan_ChannelUser *chan_addToChannel(struct link_Node *channelNode, struct usr_UserData *user, int permLevel){
     struct chan_Channel *channel = channelNode->data;
-	struct chan_ChannelUser *chanUser = NULL;
+	struct chan_ChannelUser *chanUser = chan_isInChannel(channelNode, user);
 
-    if(chan_isInChannel(channelNode, user) == NULL){ // Not in the channel // Not in the channel
+    if(chanUser == NULL){ // Not in the channel
         pthread_mutex_lock(&channel->channelMutex);
 		for(int i = 0; i < channel->max; i++){
 			if(channel->users[i].user == NULL){ // Empty spot
 				channel->users[i].user = user;
-				channel->users[i].permLevel = 0;
+				channel->users[i].permLevel = permLevel;
 				chanUser = &channel->users[i];
 				break;
 			}

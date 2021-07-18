@@ -1,5 +1,6 @@
 #include "group.h"
 
+// Creates a new group, adds it to the main list, and creates a default channel
 struct link_Node *grp_createGroup(char *name, struct usr_UserData *user){
 	if(name[0] != '&'){
 		return NULL;
@@ -51,7 +52,7 @@ struct link_Node *grp_createGroup(char *name, struct usr_UserData *user){
 	}
 
 	// Generate a default Channel
-	chan_createChannel("#default", node);
+	chan_createChannel("#default", node, user);
 
 	// Make selected user OPER of the group
 	grp_addUser(node, user, 1);
@@ -62,6 +63,9 @@ struct link_Node *grp_createGroup(char *name, struct usr_UserData *user){
 struct link_Node *grp_getGroup(char *name){
 	struct link_Node *node;
 	struct grp_Group *group;
+
+	if(name[0] == '\0') // Null defaults to default group
+		return serverLists.groups.head;
 
 	if(name[0] != '&')
 		return NULL;
@@ -86,6 +90,10 @@ struct link_Node *grp_getGroup(char *name){
 	return NULL;
 }
 
+// Add user to the group and auto join to all public channels
+// TODO -auto join channels
+// TODO - send names message
+// TODO check for key access
 struct grp_GroupUser *grp_addUser(struct link_Node *groupNode, struct usr_UserData *user, int permLevel){
 	struct grp_Group *group = groupNode->data;
 	struct grp_GroupUser *grpUser = NULL;
