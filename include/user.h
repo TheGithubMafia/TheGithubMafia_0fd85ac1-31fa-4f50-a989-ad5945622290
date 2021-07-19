@@ -17,6 +17,7 @@ struct usr_UserData {
 	char *nickname;
 	struct com_SocketInfo socketInfo;	
 	pthread_mutex_t userMutex;
+	struct link_List sendQ;
 
 	time_t lastMsg; // Keep track of time, too fast = kick, too slow = kick
 	int pinged; // Send only one ping to prevent spam from server

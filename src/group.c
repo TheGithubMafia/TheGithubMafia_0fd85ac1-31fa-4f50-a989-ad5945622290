@@ -90,6 +90,19 @@ struct link_Node *grp_getGroup(char *name){
 	return NULL;
 }
 
+// Returns group's name safely
+int grp_getName(struct link_Node *groupNode, char *buff, int size){
+	if(groupNode == NULL || groupNode->data == NULL)
+		return -1;
+
+	struct grp_Group *group = groupNode->data;
+	pthread_mutex_lock(&group->groupMutex);
+	strncpy(buff, group->name, size);
+	pthread_mutex_unlock(&group->groupMutex);
+
+	return 1;
+}
+
 // Add user to the group and auto join to all public channels
 // TODO -auto join channels
 // TODO - send names message
@@ -178,4 +191,58 @@ struct link_Node *grp_getChannel(struct link_Node *groupNode, char *name){
 	pthread_mutex_unlock(&group->groupMutex);
 
 	return NULL;
+}
+
+// Fills string with names of users in the group
+int grp_getUsersInGroup(struct link_Node *groupNode, char *buff, int size){
+    struct grp_Group *group = groupNode->data;
+    char nickname[fig_Configuration.nickLen];
+    int pos = 1;
+
+    buff[0] = ':';
+    pthread_mutex_lock(&group->groupMutex);
+	for(int i = 0; i < group->max; i++){
+		if(group->users[i].user != NULL){
+			switch(group->users[i].permLevel) {
+				case 1: // Group operator
+					strncat(buff, "^", size - pos - 1);
+					pos++;
+					break;
+			}
+
+			usr_getNickname(nickname, group->users[i].user);
+			strncat(buff, nickname, size - pos - 1);
+			pos = strlen(buff);
+
+			// Space inbetween users
+			buff[pos] = ' ';
+			buff[pos + 1] = '\0';
+			pos++;
+		}
+    }
+    pthread_mutex_unlock(&group->groupMutex);
+
+    return 1;
+}
+
+int grp_sendGroupMessage(struct chat_Message *cmd, struct link_Node *groupNode){
+	struct usr_UserData *origin = cmd->user;
+    struct grp_Group *group = groupNode->data;
+
+    pthread_mutex_lock(&group->groupMutex);
+	for(int i = 0; i < group->max; i++){
+        cmd->user = group->users[i].user;
+		
+		// Dont send to sender or invalid users
+		if(cmd->user == origin || cmd->user == NULL){
+			continue;
+		}
+
+        chat_sendMessage(cmd);
+    }
+    pthread_mutex_unlock(&group->groupMutex);
+
+	cmd->user = origin;
+
+    return 1;
 }

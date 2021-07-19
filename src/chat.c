@@ -97,7 +97,22 @@ int chat_setupDataThreads(struct fig_ConfigData *config){
     return numThreads;
 }
 
-int chat_insertQueue(struct com_QueueJob *job){
+int chat_insertQueue(struct usr_UserData *user, int type, char *str, struct chat_Message *msg){
+	struct com_QueueJob *job;
+	job = calloc(1, sizeof(struct com_QueueJob));
+	if(job == NULL){
+		log_logError("Error allocating job", ERROR);
+		if(msg != NULL)
+			free(msg);
+		return -1;
+	}
+
+	job->type = type;
+	job->user = user;
+	job->msg = msg;
+	if(str != NULL)
+		strncpy(job->str, str, ARRAY_SIZE(job->str)-1);
+
     pthread_mutex_lock(&dataQueue.queueMutex); 
     link_add(&dataQueue.queue, job);
     pthread_mutex_unlock(&dataQueue.queueMutex); 
@@ -157,7 +172,6 @@ void *chat_processQueue(void *param){
 int chat_parseInput(struct com_QueueJob *job){
     struct usr_UserData *user = job->user;
     struct chat_Message *cmd = malloc(sizeof(struct chat_Message));
-    struct com_QueueJob *cmdJob;
 
     if(cmd == NULL){
             log_logError("Error creating cmd struct", DEBUG);
@@ -169,7 +183,7 @@ int chat_parseInput(struct com_QueueJob *job){
     int length = 0;
     int currentPos = 0, loc = 0; // Helps to keep track of where string should be copied
     for (int i = 0; i < ARRAY_SIZE(job->str)-1; i++){
-        if(job->str[i] == '\n' || job->str[i] == '\r'){
+        if(job->str[i] == '\n' || job->str[i] == '\r' || job->str[i] == '\0'){
             length = i+1;
             job->str[i] = ' ';
             break;
@@ -215,18 +229,7 @@ int chat_parseInput(struct com_QueueJob *job){
 
     cmd->user = user;
 
-    // Create job to execute command
-    cmdJob = calloc(1, sizeof(struct com_QueueJob));
-    if(cmdJob == NULL){
-            log_logError("Error creating job", DEBUG);
-            free(cmd);
-            return -1;
-    }
-    cmdJob->msg = cmd;
-    cmdJob->user = user;
-    cmdJob->type = 1; // Run as a command
-
-    return chat_insertQueue(cmdJob);
+    return chat_insertQueue(user, 1, NULL, cmd);
 }
 
 int chat_sendMessage(struct chat_Message *msg) {

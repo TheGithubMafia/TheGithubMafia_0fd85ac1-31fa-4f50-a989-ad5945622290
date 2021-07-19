@@ -5,7 +5,7 @@
 
 int link_isEmpty(struct link_List *list){
     if(list->head == NULL || list->size <= 0){
-            return 0;
+            return 1;
     }
 
     return -1;
@@ -53,10 +53,10 @@ struct link_Node *link_insert(struct link_List *list, void *data, int pos){
 void *link_remove(struct link_List *list, int pos){
     struct link_Node *node = link_getNode(list, pos);
     if(node == NULL){
-            char buff[100];
-            snprintf(buff, ARRAY_SIZE(buff), "Position %d does not exist", pos);
-            log_logMessage(buff, DEBUG);
-            return NULL;
+		char buff[100];
+		snprintf(buff, ARRAY_SIZE(buff), "Position %d does not exist", pos);
+		log_logMessage(buff, DEBUG);
+		return NULL;
     }
 
     return link_removeNode(list, node);

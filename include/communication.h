@@ -18,18 +18,14 @@
 #include "linkedlist.h"
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
+#define MAX_MESSAGE_LENGTH 2048
 
 /* This header defines functions that handle all of the
  * Sending and receiving of data that the server will handle
  */
 
-// Queue for the communication threads to get write jobs
-struct com_DataQueue {
-    struct link_List queue;
-    pthread_mutex_t queueMutex;
-};
-
 // Jobs for queues
+// TODO - combine str and msg into a union
 struct com_QueueJob {
     int type;
     struct usr_UserData *user;
@@ -63,9 +59,6 @@ int com_insertQueue(struct com_QueueJob *job);
 
 // Convert sockaddr to a string to display the client's IP in string form
 int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int protocol);
-
-//Find first avaliable job in the queue that the thread can use
-int com_hasJob(struct com_DataQueue *dataQ, struct usr_UserData *user);
 
 // Will read data from the socket and properly send it for processing
 int com_readFromSocket(struct epoll_event *userEvent, int epollfd);

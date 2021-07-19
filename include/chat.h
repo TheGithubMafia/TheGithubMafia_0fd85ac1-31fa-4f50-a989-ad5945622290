@@ -58,9 +58,8 @@ int chat_serverIsFull();
 // Setup threads for data processing
 int chat_setupDataThreads(struct fig_ConfigData *config);
 
-// Insert selected node into the queue for processing
-// Mutex is handled by this function internally
-int chat_insertQueue(struct com_QueueJob *job);
+// Give data about a job and insert it into the queue
+int chat_insertQueue(struct usr_UserData *user, int type, char *str, struct chat_Message *msg);
 
 // Process the queue's contents and then send data back
 // to the communication queue for sending back to clients

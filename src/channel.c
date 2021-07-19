@@ -387,7 +387,7 @@ int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
     char nickname[fig_Configuration.nickLen];
     int pos = 1;
 
-    buff[0] = ':';
+	strncpy(buff, ":", size);
     pthread_mutex_lock(&channel->channelMutex);
 	for(int i = 0; i < channel->max; i++){
 		if(channel->users[i].user != NULL){
@@ -397,7 +397,7 @@ int chan_getUsersInChannel(struct link_Node *channelNode, char *buff, int size){
 					pos++;
 					break;
 
-				case 1: // Channel operator
+				case 1: // Channel voice
 					strncat(buff, "+", size - pos - 1);
 					pos++;
 					break;

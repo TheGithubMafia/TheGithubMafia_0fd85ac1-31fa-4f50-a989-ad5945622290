@@ -121,6 +121,8 @@ int usr_deleteUser(struct usr_UserData *user){
 	if(user == NULL)
 		return -1;
 
+	printf("Deleting User\n");
+		printf("c%p\n", user);
     // Nothing new will be sent to queue
     pthread_mutex_lock(&user->userMutex);
     user->id = -1; // -1 means invalid user
@@ -133,10 +135,10 @@ int usr_deleteUser(struct usr_UserData *user){
 	close(user->socketInfo.socket2);
     user->socketInfo.socket2 = -2; // Ensure that no data sent to wrong user
 
+    pthread_mutex_unlock(&user->userMutex);
+
     // Remove all pending messages
     com_cleanQueue(user);
-
-    pthread_mutex_unlock(&user->userMutex);
 
     // Channels
     chan_removeUserFromAllChannels(user);
@@ -161,6 +163,7 @@ int usr_timeOutUsers(int timeOut){
 
 			if(id != -1 && id != 0){ // Neither invalid nor SERVER
 				if(diff > timeOut){
+					log_logMessage("User timeout.", INFO);
 					usr_deleteUser(user);	
 				} else if(pinged == -1 && diff > timeOut/2){ // Ping user
 					com_sendStr(user, "PING :Timeout imminent.");

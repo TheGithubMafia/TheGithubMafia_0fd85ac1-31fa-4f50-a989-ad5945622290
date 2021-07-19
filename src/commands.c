@@ -273,6 +273,9 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 	char nick[fig_Configuration.nickLen];
 	usr_getNickname(nick, user);
 
+	// Used to generate the NAMES command later
+	char namesCMD[MAX_MESSAGE_LENGTH] = "NAMES "; 
+
 	// Split name into group and channel
 	char names[2][1000];
 	int ret = chat_divideChanName(cmd->params[0], strlen(cmd->params[0]), names);
@@ -290,6 +293,11 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 			chat_createMessage(reply, user, thisServer, ERR_NOSUCHGROUP, params, 1);
 			return -1;
 		}
+
+		// NAMES
+		char buff[fig_Configuration.groupNameLength];
+		grp_getName(groupNode, buff, ARRAY_SIZE(buff));
+		strncat(namesCMD, buff, ARRAY_SIZE(namesCMD)-strlen(namesCMD)-2);
 	} else { // Join if not already in
 		if(grp_isInGroup(groupNode, user) == NULL){
 			struct grp_GroupUser *grpUsr = grp_addUser(groupNode, user, 0);
@@ -299,12 +307,24 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 				return -1;
 			}
 
-			// Send group message
+			char buff[fig_Configuration.groupNameLength];
+			grp_getName(groupNode, buff, ARRAY_SIZE(buff));
+
+			params[0] = buff;
+			chat_createMessage(reply, user, nick, "JOIN", params, 1);
+			grp_sendGroupMessage(reply, groupNode);
+			params[0] = cmd->params[0]; // Reset back to default
+
+			// NAMES
+			strncat(namesCMD, buff, ARRAY_SIZE(namesCMD)-strlen(namesCMD)-2);
 		}
 	}
 
-	if(names[1][0] == '\0') // No further action: group joined
+	if(names[1][0] == '\0'){ // No further action: group joined
+		// Generate names for the JOIN
+		chat_insertQueue(user, 0, namesCMD, NULL);
 		return 2;
+	}
 
 	// Sort out channel	
 	struct link_Node *channelNode = grp_getChannel(groupNode, names[1]);
@@ -327,6 +347,12 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 		chan_sendChannelMessage(reply, channelNode);
 	}
 
+	// Generate names for the JOIN
+	if(namesCMD[6] != '\0') // Also joined a GROUP
+		strcat(namesCMD, ",");
+	strncat(namesCMD, cmd->params[0], ARRAY_SIZE(namesCMD)-strlen(namesCMD)-2);
+	chat_insertQueue(user, 0, namesCMD, NULL);
+
 	return 2;
 }
 
@@ -335,29 +361,65 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
+	char items[5][1001] = {0};
+
+	char buff[BUFSIZ];
+	strncpy(buff, cmd->params[0], ARRAY_SIZE(buff));
     
-    struct link_Node *channel = chan_getChannelByName(cmd->params[0]);
-    if(channel == NULL){
-        params[0] = (char *) invalidChanName;
-        chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
-        return -1;
-    }
+	// Split up into array based on commas
+	int loc = 0, num = 0;
+	while(loc != -1 && num < ARRAY_SIZE(items)){
+		int oldLoc = loc;
+		loc = chat_findCharacter(buff, strlen(cmd->params[0]), ',');
+		if(loc > -1){
+			buff[loc] = '\0'; // Aid to strncpy	
+			loc++; // Start at char after ','
+		}
+		strncpy(items[num], &buff[oldLoc], ARRAY_SIZE(items[0])-1);
 
-    // Success
-    char nickname[fig_Configuration.nickLen];
-    usr_getNickname(nickname, user);
-    char names[ARRAY_SIZE(cmd->params[0])] = {0};
-    chan_getUsersInChannel(channel, names, ARRAY_SIZE(names));
-    params[0] = nickname;
-    params[1] = "=";
-    params[2] = cmd->params[0];
-    params[3] = names;
+		num++;
+	}
 
-    chat_createMessage(reply, user, thisServer, RPL_NAMREPLY, params, 4);
-	chat_sendMessage(reply);
+	char nick[fig_Configuration.nickLen];
+	usr_getNickname(nick, user);
+	char names[ARRAY_SIZE(cmd->params[0])];
+	for(int i = 0; i < ARRAY_SIZE(items); i++){
+		if(items[i][0] == '\0')
+			break;
+		
+		// Default structure
+		params[0] = nick;
+		params[1] = "=";
+		params[2] = items[i];
+		params[3] = names;
 
-	rpl_endofnames(reply, channel->data, user);
-    return 1;
+		// Check to see if channel is the correct one first
+		struct link_Node *chan = chan_getChannelByName(items[i]);
+		if(chan == NULL && items[i][0] != '&'){ // Both invalid
+			params[0] = items[i];
+			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
+			continue;
+		} else if(chan != NULL){ // Channel valid
+			chan_getUsersInChannel(chan, names, ARRAY_SIZE(names));
+		} else { // Group valid
+			struct link_Node *group = grp_getGroup(items[i]);
+			if(group == NULL){
+				params[0] = items[i];
+				chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
+				continue;
+			}
+
+			grp_getUsersInGroup(group, names, ARRAY_SIZE(names));
+		}
+
+		chat_createMessage(reply, user, thisServer, RPL_NAMREPLY, params, 4);
+		chat_sendMessage(reply);
+	}
+
+	params[0] = cmd->params[0];
+	params[1] = ":End of /NAMES list";
+	chat_createMessage(reply, user, thisServer, RPL_ENDOFNAMES, params, 2);
+	return 1;
 }
 
 // Leave a channel

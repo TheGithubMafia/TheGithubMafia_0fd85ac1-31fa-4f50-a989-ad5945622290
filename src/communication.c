@@ -23,8 +23,6 @@ struct usr_UserData *serverUser;
 
 int timeOut, messageLimit;
 
-struct com_DataQueue com_dataQ;
-
 extern struct chat_ServerLists serverLists;
 
 int init_server(){
@@ -61,13 +59,6 @@ int init_server(){
 		return -1;
 	}
     
-    // Initalize mutex to prevent locking issues
-    int ret = pthread_mutex_init(&com_dataQ.queueMutex, NULL);
-    if (ret < 0){
-        log_logError("Error initalizing pthread_mutex.", ERROR);
-        return -1;
-    }
-
 	timeOut = fig_Configuration.timeOut;
 	messageLimit = fig_Configuration.messageLimit;
 
@@ -87,7 +78,7 @@ void com_close(){
 
 // Make a new job and insert it into the queue for sending
 int com_sendStr(struct usr_UserData *user, char *msg){
-	if(user == NULL)
+	if(user == NULL || user == &serverLists.users[0])
 		return -1;
 
     struct com_QueueJob *job = calloc(1, sizeof(struct com_QueueJob));
@@ -96,7 +87,7 @@ int com_sendStr(struct usr_UserData *user, char *msg){
     snprintf(job->str, ARRAY_SIZE(job->str), "%s\r\n", msg);
     com_insertQueue(job);
 
-	// Safely get user's mutex
+	// Safely get user's socket
 	pthread_mutex_lock(&user->userMutex);
 	int sock = user->socketInfo.socket2;
 	pthread_mutex_unlock(&user->userMutex);
@@ -113,44 +104,41 @@ int com_sendStr(struct usr_UserData *user, char *msg){
     return 1;
 }
 
-// Will remove all instances of a user from the queue
+// Will remove all remaining jobs in a user's queue
 int com_cleanQueue(struct usr_UserData *user){
-    struct link_Node *node;
-    struct com_QueueJob *job;
+	if(user == NULL)
+		return -1;
 
-	pthread_mutex_lock(&com_dataQ.queueMutex); 
+	pthread_mutex_lock(&user->userMutex); 
 
-	int pos = 0;
-	for(node = com_dataQ.queue.head; node != NULL; node = node->next){
-		job = node->data;
-		if(job->user == user){
-			free(link_remove(&com_dataQ.queue, pos));
-			pos--; // List is one item shorter
-		}
-
-		pos++;
+	while(link_isEmpty(&user->sendQ) == -1){ // Keep removing items until empty
+		free(link_remove(&user->sendQ, 0));
 	}
 
-	pthread_mutex_unlock(&com_dataQ.queueMutex); 
-	return 1;
+	pthread_mutex_unlock(&user->userMutex); 
 
-    return -1;
+	return 1;
 }
 
 int com_insertQueue(struct com_QueueJob *job){
     struct usr_UserData *user = job->user;
+
+	if(job == NULL){
+		log_logMessage("Invalid job.", DEBUG);
+		return -1;
+	}
 
     if(!user || user->id == -1){ // User is disconnecting; nothing new to be sent
         log_logMessage("User no longer valid", TRACE);
         return -1; 
     }
 
-    pthread_mutex_lock(&com_dataQ.queueMutex);
-	struct link_Node *ret = link_add(&com_dataQ.queue, job);
+    pthread_mutex_lock(&user->userMutex);
+	struct link_Node *ret = link_add(&user->sendQ, job);
 	if(ret == NULL){
 		log_logMessage("Error adding job to queue", WARNING);
 	}
-    pthread_mutex_unlock(&com_dataQ.queueMutex);
+    pthread_mutex_unlock(&user->userMutex);
 
     return 1;
 }
@@ -177,29 +165,6 @@ int getHost(char ipstr[INET6_ADDRSTRLEN], struct sockaddr_storage addr, int prot
 	return 0;
 }
 
-// Will return location of job if true, else -1
-int com_hasJob(struct com_DataQueue *dataQ, struct usr_UserData *user){
-    struct link_Node *node = NULL;
-    int loc = 0;
-
-    pthread_mutex_lock(&dataQ->queueMutex); 
-
-    for(node = dataQ->queue.head; node != NULL; node = node->next){
-        struct usr_UserData *otherUser;
-		otherUser = ((struct com_QueueJob *) node->data)->user;
-
-        if(user == otherUser){
-            pthread_mutex_unlock(&dataQ->queueMutex); 
-            return loc;
-        }
-
-        loc++;
-    }
-
-    pthread_mutex_unlock(&dataQ->queueMutex); 
-    return -1;
-}
-
 // Will read data from the socket and properly send it for processing
 int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	struct usr_UserData *user = userEvent->data.ptr;
@@ -209,7 +174,7 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 	}
 	int sockfd = user->socketInfo.socket;
 		
-	char buff[BUFSIZ] = {0};
+	char buff[MAX_MESSAGE_LENGTH+1] = {0};
 	int bytes = read(sockfd, buff, ARRAY_SIZE(buff)-1);
 
 	// Rearm the fd because data has already been read
@@ -239,29 +204,23 @@ int com_readFromSocket(struct epoll_event *userEvent, int epollfd){
 			pthread_mutex_unlock(&user->userMutex);
 
 			if(timeDifference < (double) messageLimit){
+				log_logMessage("User sending messages too fast.", INFO);
 				usr_deleteUser(user);
 				return -1;
 			}
 
 			// Split up each line into its own job
 			int loc = 0;
-			struct com_QueueJob *job;
 			while(loc >= 0){
 				int oldLoc = loc;
-				job = calloc(1, sizeof(struct com_QueueJob));
-				if(job == NULL){
-						log_logError("Error creating job.", DEBUG);
-						continue;
-				}
-				job->user = user;
-				job->type = 0; // Use string
+				char line[1024];
 
 				// Split each line into its own job
 				loc = chat_findEndLine(buff, ARRAY_SIZE(buff), loc);
 				if(loc > -1)
 					buff[loc - 1] = '\0';
-				strncpy(job->str, &buff[oldLoc], ARRAY_SIZE(job->str)-1);
-				chat_insertQueue(job);
+				strncpy(line, &buff[oldLoc], ARRAY_SIZE(line)-1);
+				chat_insertQueue(user, 0, line, NULL);
 			}
 	}
 
@@ -276,49 +235,45 @@ int com_writeToSocket(struct epoll_event *userEvent, int epollfd){
 		return -1;
 	}
 
-	int jobLoc = com_hasJob(&com_dataQ, user);
-	struct com_QueueJob *job;
+	// Remove the first job
+	struct com_QueueJob *job = NULL;
+	pthread_mutex_lock(&user->userMutex);
+	if(link_isEmpty(&user->sendQ) == -1){
+		job = link_removeNode(&user->sendQ, user->sendQ.head);
+	}
+	pthread_mutex_unlock(&user->userMutex);
 
-	if(jobLoc >= 0){
-		pthread_mutex_lock(&com_dataQ.queueMutex);
-		job = link_remove(&com_dataQ.queue, jobLoc);
-		pthread_mutex_unlock(&com_dataQ.queueMutex);
+	if(job == NULL)
+		return -1;
 
-		if(job == NULL)
-			return -1;
+	char buff[ARRAY_SIZE(job->str)];
+	strncpy(buff, job->str, ARRAY_SIZE(buff));
+	free(job);
 
-		struct usr_UserData *user = job->user;
-		char buff[ARRAY_SIZE(job->str)];
-		strncpy(buff, job->str, ARRAY_SIZE(buff));
-		free(job);
+	pthread_mutex_lock(&user->userMutex);
+	int socket = user->socketInfo.socket2;
+	if(user->id < 0)
+		socket = -1;
+	pthread_mutex_unlock(&user->userMutex);
 
-		if(user != NULL){
-			pthread_mutex_lock(&user->userMutex);
-			int socket = user->socketInfo.socket2;
-			if(user->id < 0)
-				socket = -1;
-			pthread_mutex_unlock(&user->userMutex);
+	if(socket < 0)
+		return -1;
 
-			if(socket < 0)
-				return -1;
-
-			log_logMessage(buff, MESSAGE);
-			int ret = write(user->socketInfo.socket2, buff, strlen(buff));
-			if(ret == -1){
-				log_logError("Error writing to client", ERROR);
-				usr_deleteUser(user);
-				return -1;
-			}
-			
-			// Setup to allow for another write if avaliable
-			struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
-			ev.data.ptr = user;
-			if(epoll_ctl(epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
-				log_logError("Error rearming write socket", WARNING);
-				usr_deleteUser(user);
-				return -1;
-			}
-		}
+	log_logMessage(buff, MESSAGE);
+	int ret = write(user->socketInfo.socket2, buff, strlen(buff));
+	if(ret == -1){
+		log_logError("Error writing to client", ERROR);
+		usr_deleteUser(user);
+		return -1;
+	}
+	
+	// Setup to allow for another write if avaliable
+	struct epoll_event ev = {.events = EPOLLOUT|EPOLLONESHOT};
+	ev.data.ptr = user;
+	if(epoll_ctl(epollfd, EPOLL_CTL_MOD, user->socketInfo.socket2, &ev) == -1){
+		log_logError("Error rearming write socket", WARNING);
+		usr_deleteUser(user);
+		return -1;
 	}
 	
 	return 0;

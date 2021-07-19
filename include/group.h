@@ -30,6 +30,9 @@ struct link_Node *grp_createGroup(char *name, struct usr_UserData *user);
 
 struct link_Node *grp_getGroup(char *name);
 
+// Returns group's name safely
+int grp_getName(struct link_Node *groupNode, char *buff, int size);
+
 // Add user to the group and auto join to all public channels
 struct grp_GroupUser *grp_addUser(struct link_Node *groupNode, struct usr_UserData *user, int permLevel);
 
@@ -38,5 +41,11 @@ struct grp_GroupUser *grp_isInGroup(struct link_Node *groupNode, struct usr_User
 struct link_Node *grp_addChannel(struct link_Node *groupNode, struct chan_Channel *chan);
 
 struct link_Node *grp_getChannel(struct link_Node *groupNode, char *name);
+
+// Fills string with names of users in the group
+int grp_getUsersInGroup(struct link_Node *groupNode, char *buff, int size);
+
+// Sends a message to all users in this group
+int grp_sendGroupMessage(struct chat_Message *cmd, struct link_Node *groupNode);
 
 #endif
