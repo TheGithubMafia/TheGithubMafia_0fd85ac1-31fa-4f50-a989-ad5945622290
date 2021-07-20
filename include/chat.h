@@ -14,6 +14,12 @@
 
 #define ARRAY_SIZE(arr) (int)(sizeof(arr)/sizeof((arr)[0]))
 
+#define TYPE_USER 0
+#define TYPE_CHAN 1
+#define TYPE_GROUP 2
+
+#define NUM_MODES 15
+
 /*  Note about the structure of the users
     All new users are added to the main linked
     list via malloc. All other uses to users should
@@ -93,6 +99,6 @@ int chat_findCharacter(char *str, int size, char key);
 int chat_divideChanName(char *str, int size, char data[2][1000]);
 
 // Checks if a given mode is valid
-int chat_isValidMode(char mode, int isChan);
+int chat_isValidMode(char mode, int type);
 
 #endif

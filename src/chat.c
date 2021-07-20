@@ -279,7 +279,8 @@ int chat_createMessage(struct chat_Message *msg, struct usr_UserData *user, char
     strncpy(msg->command, cmd, ARRAY_SIZE(msg->command));
 
     for (int i = 0; i < paramCount; i++){
-            strncpy(msg->params[i], params[i], ARRAY_SIZE(msg->params[i]));
+		if(params[i] != NULL)
+			strncpy(msg->params[i], params[i], ARRAY_SIZE(msg->params[i]));
     }
 
     msg->paramCount = paramCount;
@@ -366,10 +367,14 @@ int chat_divideChanName(char *str, int size, char data[2][1000]){
 	return 1;
 }
 
-int chat_isValidMode(char mode, int isChan){
-	if(isChan == -1){
-		return usr_isUserMode(mode);
-	}
+int chat_isValidMode(char mode, int type){
+	switch (type){
+		case TYPE_GROUP:
+			return grp_isGroupMode(mode);
 
-	return chan_isChanMode(mode);
+		case TYPE_CHAN:
+			return chan_isChanMode(mode);
+	}
+	
+	return usr_isUserMode(mode);
 }

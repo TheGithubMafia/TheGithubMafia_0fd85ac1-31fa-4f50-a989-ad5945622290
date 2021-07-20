@@ -13,7 +13,7 @@
 // except with socketInfo.socket must equal -1
 struct usr_UserData {
 	int id;
-	char modes[5];
+	char modes[NUM_MODES];
 	char *nickname;
 	struct com_SocketInfo socketInfo;	
 	pthread_mutex_t userMutex;

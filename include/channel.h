@@ -25,7 +25,7 @@ struct chan_ChannelUser {
 struct chan_Channel {
 	int id;
 	char *name;
-	char modes[5];
+	char modes[NUM_MODES];
 	char key[20];
 	int max;
 	struct chan_ChannelUser *users;
@@ -52,7 +52,8 @@ struct link_Node *chan_createChannel(char *name, struct link_Node *group, struct
 int chan_channelHasMode(char mode, struct link_Node *channelNode);
 
 // Take a channel mode and execute it
-char *chan_executeChanMode(char op, char mode, struct link_Node *channel, char *data);
+// Index is used to help the command parser know which parameter to use
+char *chan_executeChanMode(char op, char mode, struct link_Node *channel, char *data, int *index);
 
 // Adds or removes a mode from a channel's modes array
 void chan_changeChannelModeArray(char op, char mode, struct link_Node *channelNode);

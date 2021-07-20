@@ -1,4 +1,4 @@
-This is a file that describes all the modes users and channels may have
+This is a file that describes all the modes users, channels and groups may have
 
 USERS
 i - Makes the user appear offline
@@ -13,4 +13,12 @@ i - invite only
 b - bans
 v - Give or remove chanvoice
 m - require chanvoice to speak
+k - edit key
+
+GROUPS
+o - Give or remove groupop
+s - secret group
+i - invite only
+b - bans
+m - disallow members from creating new channels
 k - edit key

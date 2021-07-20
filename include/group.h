@@ -15,7 +15,7 @@ struct grp_GroupUser {
 // All at once, and an operator has full control over all
 struct grp_Group {
     char *name;
-	char modes[5];
+	char modes[NUM_MODES];
 	char key[20];
     struct link_List channels;
 	int max;
@@ -41,6 +41,8 @@ struct grp_GroupUser *grp_isInGroup(struct link_Node *groupNode, struct usr_User
 struct link_Node *grp_addChannel(struct link_Node *groupNode, struct chan_Channel *chan);
 
 struct link_Node *grp_getChannel(struct link_Node *groupNode, char *name);
+
+int grp_isGroupMode(char mode);
 
 // Fills string with names of users in the group
 int grp_getUsersInGroup(struct link_Node *groupNode, char *buff, int size);

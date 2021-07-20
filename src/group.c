@@ -1,5 +1,7 @@
 #include "group.h"
 
+const char grp_groupModes[] = {'o', 's', 'i', 'b', 'm', 'k'};
+
 // Creates a new group, adds it to the main list, and creates a default channel
 struct link_Node *grp_createGroup(char *name, struct usr_UserData *user){
 	if(name[0] != '&'){
@@ -191,6 +193,16 @@ struct link_Node *grp_getChannel(struct link_Node *groupNode, char *name){
 	pthread_mutex_unlock(&group->groupMutex);
 
 	return NULL;
+}
+
+int grp_isGroupMode(char mode){
+	for(int i = 0; i < ARRAY_SIZE(grp_groupModes); i++){
+		if(mode == grp_groupModes[i]){
+			return 1;
+		}
+	}
+	
+	return -1;
 }
 
 // Fills string with names of users in the group

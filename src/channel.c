@@ -177,7 +177,7 @@ int chan_channelHasMode(char mode, struct link_Node *channelNode){
 }
 
 // Takes a channel mode and executes it
-char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, char *data){
+char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, char *data, int *index){
 	int perm = 1;
 	struct chan_Channel *channel = channelNode->data;
 	struct usr_UserData *user;
@@ -186,6 +186,7 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 		return ERR_NOSUCHCHANNEL;
 	}
 
+	*index += 1;
 	switch (mode) {
 		case 'o':
 			perm++;
@@ -204,6 +205,7 @@ char *chan_executeChanMode(char op, char mode, struct link_Node *channelNode, ch
 			return chan_removeKey(channelNode, data);
 		
 		default: // No special action needed, simply add it to the array
+			*index -= 1; // Undo addition (No data used)
 			chan_changeChannelModeArray(op, mode, channelNode);
 	}
 

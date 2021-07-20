@@ -506,9 +506,11 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
     params[0] = cmd->params[0];
 	params[1] = cmd->params[1];
 
-	int isChan = -1;
-    if(cmd->params[0][0] == '#'){
-		isChan = 1;
+	int type = TYPE_USER;
+    if(chan_getChannelByName(cmd->params[0]) != NULL){
+		type = TYPE_CHAN;
+	} else if(cmd->params[0][0] == '&') { // Last possible option is a group
+		type = TYPE_GROUP;
 	}
 
 	// Make sure all modes are valid
@@ -519,7 +521,7 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 	}
 
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
-		if(chat_isValidMode(cmd->params[1][i], isChan) == -1){
+		if(chat_isValidMode(cmd->params[1][i], type) == -1){
 			char rpl[20];
 			snprintf(rpl, ARRAY_SIZE(rpl), ":No such mode: %c", cmd->params[1][i]);
 
@@ -529,17 +531,22 @@ int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 		}
 
 		// May not set themselves as OP or registered or away
-		if(isChan == -1 && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r' || cmd->params[1][i] == 'a')){
+		if(type == TYPE_USER && (cmd->params[1][i] == 'o' || cmd->params[1][i] == 'r' || cmd->params[1][i] == 'a')){
 			return 2; // Say nothing
 		}
 	}
 
 	//Check whether mode is for channel or user
-    if(cmd->params[0][0] != '#'){
-		return cmd_modeUser(cmd, reply, op, hasOp);
-    }
+	switch(type){
+		case TYPE_CHAN:
+			return cmd_modeChan(cmd, reply, op, hasOp);
+			
+		case TYPE_GROUP:
+			//return cmd_modeGroup(cmd, reply, op, hasOp);
+			return 2;
+	}
 
-	return cmd_modeChan(cmd, reply, op, hasOp);
+	return cmd_modeUser(cmd, reply, op, hasOp);
 }
 
 // Used by cmd_mode specifically for the user
@@ -590,6 +597,43 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
 	}
 
 	// Set all the modes
+	int index = 0;
+	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
+		params[2+index] = cmd->params[2+index]; // Fill in extra parameters
+		char *ret = chan_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2+index], &index);		
+		if(ret != NULL){
+			params[0] = nickname;
+			params[1] = params[2]; // Problematic value
+			chat_createMessage(reply, user, thisServer, ret, params, 1);
+			return -1;
+		}
+	}
+
+	chat_createMessage(reply, NULL, nickname, "MODE", params, 3+index);
+    chan_sendChannelMessage(reply, channel);
+	return 2;
+}
+
+// Used by cmd_mode specifically for a group
+/*
+int cmd_modeGroup(struct chat_Message *cmd, struct chat_Message *reply, char op, int hasOp){
+    struct usr_UserData *user = cmd->user;
+	struct link_Node *group = NULL;
+    char *params[ARRAY_SIZE(cmd->params)];
+	char nickname[fig_Configuration.nickLen];
+	usr_getNickname(nickname, user);
+
+	// Default values
+    params[0] = cmd->params[0];
+	params[1] = cmd->params[1];
+	params[2] = cmd->params[2];
+
+	group = cmd_checkChannelPerms(reply, cmd->params[0], user, 2);
+	if(!channel){
+		return -1;
+	}
+
+	// Set all the modes
 	for(int i = hasOp; i < (int) strlen(cmd->params[1]); i++){
 		//TODO - multiple data for multiple flags
 		char *ret = chan_executeChanMode(op, cmd->params[1][i], channel, cmd->params[2]);		
@@ -605,6 +649,7 @@ int cmd_modeChan(struct chat_Message *cmd, struct chat_Message *reply, char op, 
     chan_sendChannelMessage(reply, channel);
 	return 2;
 }
+*/
 
 // Send back a PONG
 int cmd_ping(struct chat_Message *cmd, struct chat_Message *reply){
