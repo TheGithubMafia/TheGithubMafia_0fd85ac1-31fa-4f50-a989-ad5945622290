@@ -335,7 +335,17 @@ int cmd_join(struct chat_Message *cmd, struct chat_Message *reply){
 			chat_createMessage(reply, user, thisServer, ERR_NOSUCHCHANNEL, params, 1);
 			return -1;
 		}
+
+		if(cmd->paramCount > 1)
+			chan_setKey(channelNode, cmd->params[1]);
 	} else {
+		if(chan_checkKey(channelNode, cmd->params[1]) == -1){ // Invalid key
+			params[1] = cmd->params[0];
+			params[0] = nick;
+			chat_createMessage(reply, user, thisServer, ERR_BADCHANNELKEY, params, 2);
+			return -1;
+		}
+		
 		struct chan_ChannelUser *chanUsr = chan_addToChannel(channelNode, user, 0);
 		if(chanUsr == NULL){
 			// FULL
@@ -422,7 +432,7 @@ int cmd_names(struct chat_Message *cmd, struct chat_Message *reply){
 	return 1;
 }
 
-// Leave a channel
+// Leave a channel or group
 // TODO - add error checking
 int cmd_part(struct chat_Message *cmd, struct chat_Message *reply){
     struct usr_UserData *user = cmd->user;
@@ -487,7 +497,7 @@ int cmd_kick(struct chat_Message *cmd, struct chat_Message *reply){
     return 1;
 }
 
-// Edit modes for channels and users
+// Edit modes for channels, groups and users
 int cmd_mode(struct chat_Message *cmd, struct chat_Message *reply){
 	struct usr_UserData *user = cmd->user;
     char *params[ARRAY_SIZE(cmd->params)];
